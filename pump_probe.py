@@ -132,11 +132,3 @@ def pump_probe_projector(hamiltonian, t_max, polarization='xx', rw_freq=None,
 
     return MetaArray(tr_Vf_G_V_ee, ticks=t_range, rw_freq=rw_freq,
                      GSB=tr_Vf_G_V_GSB, ESE=tr_Vf_G_V_ESE, ESA=tr_Vf_G_V_ESA)
-
-
-pump_probe_projector_iso = isotropic_average_2nd_order(pump_probe_projector)
-
-
-def simulate_pump_probe(hamiltonian):
-    """to fill in"""
-    pass
