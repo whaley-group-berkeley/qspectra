@@ -21,7 +21,7 @@ class Pulse(object):
         Final time for the pulse.
     """
 
-    __meta__ = ABCMeta
+    __metaclass__ = ABCMeta
 
     @abstractmethod
     def __call__(self, t, rw_freq):
@@ -69,7 +69,7 @@ class CustomPulse(Pulse):
 
 class GaussianPulse(Pulse):
     def __init__(self, carrier_freq, fwhm, t_peak=0, scale=1, freq_convert=1,
-                 pulse_length=3):
+                 t_limits_multiple=3):
         """
         Initialize a Gaussian pulse
 
@@ -95,8 +95,8 @@ class GaussianPulse(Pulse):
         sigma = GAUSSIAN_SD_FWHM * fwhm
         self.two_sigma_squared = 2 * sigma ** 2
 
-        self.t_init = t_peak - 3 * sigma
-        self.t_final = t_peak + 3 * sigma
+        self.t_init = t_peak - t_limits_multiple * sigma
+        self.t_final = t_peak + t_limits_multiple * sigma
 
         self.t_peak = t_peak
         self.carrier_freq = carrier_freq

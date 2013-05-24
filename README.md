@@ -1,6 +1,5 @@
-================================
 Nonlinear Spectroscopy and Dynamics of Molecule Aggregates
-================================
+==========================================================
 
 *NAME* is a Python package designed for flexible and fast calculation of
 non-linear spectroscopy signals with novel types of dynamics. To use any of the
