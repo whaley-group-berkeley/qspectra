@@ -3,7 +3,7 @@ import numpy as np
 
 from constants import GAUSSIAN_SD_FWHM
 
-
+#i add a line here
 class Pulse(object):
     """
     Abstract base class defining the Pulse API used by spectroscopy
