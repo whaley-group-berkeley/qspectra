@@ -97,3 +97,7 @@ class imemoize(object):
         except KeyError:
             res = cache[key] = self.func(*args, **kw)
         return res
+
+
+def memoized_property(x):
+    return property(imemoize(x))

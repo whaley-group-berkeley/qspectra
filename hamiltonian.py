@@ -63,8 +63,8 @@ class Hamiltonian(object):
     def time_step(self):
         return self.system.time_step
 
-    def system_dipole_operator(self, subspace='gef', polarization='x',
-                               include_transitions='-+'):
+    def dipole_operator(self, subspace='gef', polarization='x',
+                       include_transitions='-+'):
         """
         Return the matrix representation in the given subspace of the requested
         dipole operator
@@ -97,7 +97,10 @@ class ElectronicHamiltonian(object):
     ----------
     H_1 : np.ndarray
         Matrix representation of this hamiltonian in the 1-excitation subspace
-    disorder_fwhm : float, optional
+    energy_offset : number, optional
+        Constant energy offset of the diagonal entries in H_1 from the ground
+        state energy.
+    disorder_fwhm : number, optional
         Full-width-at-half-maximum of diagonal, Gaussian disorder for
         re-samplings
     ref_system : ElectronicHamiltonian, optional
@@ -108,9 +111,10 @@ class ElectronicHamiltonian(object):
         Default extra frequency to add to the spread of energies when
         determining the frequency step size automatically.
     """
-    def __init__(self, H_1, disorder_fwhm=0, ref_system=None,
+    def __init__(self, H_1, energy_offset=0, disorder_fwhm=0, ref_system=None,
                  sampling_freq_extra=100.0):
         self.H_1 = H_1
+        self.energy_offset = energy_offset
         self.disorder_fwhm = disorder_fwhm
         self.ref_system = ref_system if ref_system is not None else self
         self.sampling_freq_extra = sampling_freq_extra
@@ -138,25 +142,49 @@ class ElectronicHamiltonian(object):
 
     @imemoize
     def H(self, subspace):
+        """
+        Returns this Hamiltonian in matrix in the given subspace
+        """
         return operator_extend(self.H_1, subspace)
 
     @imemoize
     def eig(self, subspace):
+        """
+        Returns the eigensystem solution E, U for this Hamiltonian in the given
+        subspace
+        """
         E, U = scipy.linalg.eigh(self.H(subspace))
         return (E, U)
 
     def E(self, subspace):
+        """
+        Returns the eigen-energies of this Hamiltonian in the given subspace
+        """
         return self.eig(subspace)[0]
 
     def U(self, subspace):
+        """
+        Returns the matrix which diagonalizes this Hamiltonian in the given
+        subspace
+        """
         return self.eig(subspace)[1]
 
+    def ground_state(self, subspace):
+        """
+        Returns the wave-function for the ground state of this Hamiltonian as
+        a state vector in Hilbert space
+        """
+        state = np.zeros(self.n_states(subspace), dtype=complex)
+        if 'g' in subspace:
+            state[0] = 1.0
+        return state
+
     @property
-    def central_freq(self):
+    def mean_excitation_freq(self):
         """
         Average excited state transition energy
         """
-        return np.mean(self.ref_system.E('e'))
+        return np.mean(self.ref_system.E('e')) + self.energy_offset
 
     @imemoize
     def in_rotating_frame(self, rw_freq=None):
@@ -167,11 +195,12 @@ class ElectronicHamiltonian(object):
         By default, sets the rotating frame to the central frequency.
         """
         if rw_freq is None:
-            rw_freq = self.central_freq
-        H_1 = self.H_1 - rw_freq * np.identity(len(self.H_1))
+            rw_freq = self.mean_excitation_freq
+        shift = rw_freq - self.energy_offset
+        H_1 = self.H_1 - shift * np.identity(len(self.H_1))
         ref_system = (self.ref_system.to_rotating_frame(rw_freq)
                       if (self.ref_system is not self) else None)
-        return type(self)(H_1, self.disorder_fwhm, ref_system,
+        return type(self)(H_1, rw_freq, self.disorder_fwhm, ref_system,
                           self.sampling_freq_extra)
 
     def sample(self, ensemble_size=1, random_seed=None):
@@ -182,13 +211,13 @@ class ElectronicHamiltonian(object):
         for _ in xrange(ensemble_size):
             H_1_prime = (self.H_1 + self.disorder_fwhm * GAUSSIAN_SD_FWHM
                          * np.diag(np.random.randn(self.n_sites)))
-            yield type(self)(H_1_prime, 0, self.ref_system,
+            yield type(self)(H_1_prime, self.energy_offset, 0, self.ref_system,
                              self.sampling_freq_extra)
 
     def __repr__(self):
-        return ("{0}(H_1={1}, K_2={2}, disorder_fwhm={3}, ref_system={4}, "
-                "sampling_freq_extra={5})"
-                ).format(type(self).__name__, self.H_1, self.K_2,
+        return ("{}(H_1={}, energy_offset={} disorder_fwhm={}, ref_system={}, "
+                "sampling_freq_extra={})"
+                ).format(type(self).__name__, self.H_1, self.energy_offset,
                          self.disorder_fwhm,
                          None if self.ref_system is self else self.ref_system,
                          self.sampling_freq_extra)
