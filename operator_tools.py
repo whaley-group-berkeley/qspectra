@@ -1,10 +1,46 @@
 import numpy as np
 
 
-def unit_vec(n, N):
-    v = np.zeros(N, dtype=complex)
+def unit_vec(n, N, dtype=complex):
+    """
+    Returns the unit vector in direction n in N dimensions.
+    """
+    v = np.zeros(N, dtype=dtype)
     v[n] = 1
     return v
+
+
+def basis_transform(X, U):
+    """
+    Transform X, a state vector, operator, vectorized operator or super-
+    operator, into the basis given by the unitary transformation matrix U
+
+    How to apply the transformation is inferred by the dimensions of X and U.
+
+    Reference
+    ---------
+    Havel, T. F. Robust procedures for converting among Lindblad, Kraus and
+    matrix representations of quantum dynamical semigroups. J Math. Phys.
+    44, 534-557 (2003).
+    """
+    N = len(U)
+    if X.shape == (N,):
+        # X is a vector in Hilbert space
+        return U.T.conj().dot(X)
+    elif X.shape == (N, N):
+        # X is an operator
+        return U.T.conj().dot(X).dot(U)
+    elif X.shape[0] == N ** 2:
+        # X is in Liouville space
+        U_S = np.kron(U, U)
+        if X.shape == (N ** 2,):
+            # X is a vectorized operator
+            return U_S.T.conj().dot(X)
+        elif X.shape == (N ** 2, N ** 2):
+            # X is a super-operator
+            return U_S.T.conj().dot(X).dot(U_S)
+    raise ValueError('basis transformation incompatible with '
+                     'operator dimensions')
 
 
 def all_states(N, subspace='gef'):
@@ -17,8 +53,8 @@ def all_states(N, subspace='gef'):
     ----------
     N : int
         Number of sites.
-    subspace : str, default 'gef'
-        String containing any or all of 'g', 'e' and 'f' indicating the desired
+    subspace : container, default 'gef'
+        Container of any or all of 'g', 'e' and 'f' indicating the desired
         subspaces on which the operator is defined.
 
     Returns
@@ -81,6 +117,24 @@ def operator_extend(operator1, subspace='gef'):
     """
     Extend an operator defined in the 1-excitation subspace to include the
     ground and/or double-excitation subspaces
+
+    Assumes that given the matrix element A_{nm}, the full representation of
+    the operator is given by:
+        \sum_{n,m} A_{nm} a^\dagger_n a_m
+
+    Parameters
+    ----------
+    operator1 : np.ndarray
+        Matrix representation of an operator defined on the 1-excitation
+        subspace
+    subspace : container, default 'gef'
+        Container of any or all of 'g', 'e' and 'f' indicating the desired
+        subspaces on which the operator is defined.
+
+    Returns
+    -------
+    out : np.ndarray
+        Matrix representation of the operator defined on the requested subspace
     """
     operators = []
     if 'g' in subspace:
@@ -101,19 +155,19 @@ def operator_extend(operator1, subspace='gef'):
     return operator_extended
 
 
-def transition_operator(n, N, subspace='gef', include_transitions='-+'):
+def transition_operator(n, n_sites, subspace='gef', include_transitions='-+'):
     """
     Calculate the transition operator for creating an removing an excitation
-    at site n of N sites overall
+    at site n of n_sites overall
 
     Parameters
     ----------
     n : int
         Site at which to alter the number of excitations (0-indexed).
-    N : int
+    n_sites : int
         Number of sites.
-    subspace : str, default 'gef'
-        String containing any or all of 'g', 'e' and 'f' indicating the desired
+    subspace : container, default 'gef'
+        Container of any or all of 'g', 'e' and 'f' indicating the desired
         subspaces on which the operator is defined.
     include_transitions : str, default '-+'
         String containing '-' and/or '+' to indicating whether or not to
@@ -124,7 +178,7 @@ def transition_operator(n, N, subspace='gef', include_transitions='-+'):
     out : np.ndarray
         Transition operator in matrix form
     """
-    states = all_states(N, subspace)
+    states = all_states(n_sites, subspace)
     dipole_matrix = np.zeros((len(states), len(states)))
     for i in xrange(len(states)):
         for j in xrange(len(states)):
