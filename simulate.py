@@ -1,9 +1,7 @@
 from numpy import conj
 import numpy as np
 
-# TODO (SH): define the integrate function (probably by adapting a simple
-# wrapper of ZVODE) and figure out how to pass it options
-from somewhere import integrate
+from utils import integrate
 
 
 def simulate_pump(dynamical_model, pump, polarization, time_extra=0,
@@ -40,7 +38,7 @@ def simulate_pump(dynamical_model, pump, polarization, time_extra=0,
     V_minus = dynamical_model.dipole_destroy(subspace, polarization)
     V_plus = dynamical_model.dipole_create(subspace, polarization)
 
-    def drho(rho, t):
+    def drho(t, rho):
         Et = pump(t, dynamical_model.rw_freq)
         return (eom(rho)
                 + (-1j * Et) * V_minus.commutator(rho)
