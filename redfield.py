@@ -135,7 +135,7 @@ class RedfieldModel(DynamicalModel):
 
         References
         ----------
-        Nitzan
+        Nitzan (2006)
         """
         self.hamiltonian = hamiltonian.in_rotating_frame(rw_freq)
         self.rw_freq = self.hamiltonian.system.energy_offset
@@ -168,7 +168,10 @@ class RedfieldModel(DynamicalModel):
         index = liouville_subspace_indices(liouville_subspace, self.subspace,
                                            self.hamiltonian.system.n_sites)
         mesh = np.ix_(index, index)
-        return self.redfield_super_operator[mesh].dot
+        evolve = self.redfield_super_operator[mesh]
+        def eom(t, rho):
+            return evolve.dot(rho)
+        return eom
 
     def dipole_operator(self, liouv_subspace_map, polarization, include_transitions):
         operator = self.hamiltonian.dipole_operator(self.subspace, polarization,
@@ -195,4 +198,4 @@ class RedfieldModel(DynamicalModel):
         The default time step at which to sample the equation of motion (in the
         rotating frame)
         """
-        self.hamiltonian.time_step
+        return self.hamiltonian.time_step / self.unit_convert
