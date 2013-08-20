@@ -32,8 +32,9 @@ class DynamicalModel(object):
     def equation_of_motion(self, liouville_subspace):
         """
         Return the equation of motion for this dynamical model in the given
-        subspace, a function which takes a state vector and returns its first
-        time derivative, for use in a numerical integration routine
+        subspace, a function which takes the time and a state vector and returns
+        the first time derivative of the state vector, for use in a numerical
+        integration routine
         """
 
     @abstractmethod
