@@ -23,13 +23,13 @@ class DynamicalModel(object):
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def ground_state(self, subspace):
+    def ground_state(self, liouville_subspace):
         """
         Ground state for this dynamical model
         """
 
     @abstractmethod
-    def equation_of_motion(self, subspace):
+    def equation_of_motion(self, liouville_subspace):
         """
         Return the equation of motion for this dynamical model in the given
         subspace, a function which takes a state vector and returns its first
@@ -37,17 +37,17 @@ class DynamicalModel(object):
         """
 
     @abstractmethod
-    def dipole_destroy(self, subspace, polarization):
+    def dipole_destroy(self, liouville_subspace_map, polarization):
         """
         Return a dipole annhilation operator that follows the
-        SystemFieldOperator API for the given subspace and polarization
+        SystemOperator API for the given liouville_subspace_map and polarization
         """
 
     @abstractmethod
-    def dipole_create(self, subspace, polarization):
+    def dipole_create(self, liouville_subspace_map, polarization):
         """
-        Return a dipole creation operator that follows the SystemFieldOperator
-        API for the given subspace and polarization
+        Return a dipole creation operator that follows the SystemOperator
+        API for the given liouville_subspace_map and polarization
         """
 
     @abstractproperty
@@ -58,12 +58,12 @@ class DynamicalModel(object):
         """
 
 
-class SystemFieldOperator(object):
+class SystemOperator(object):
     """
-    Abstract base class defining the SystemFieldOperator API used by
+    Abstract base class defining the SystemOperator API used by
     spectroscopy simulation methods
 
-    Instances of a SystemFieldOperator class are abstract object whose
+    Instances of a SystemOperator class are abstract object whose
     commutator and expectation value can be calculated when applied to arbitrary
     state vectors in a matching subspace used by DynamicalModel objects.
 
@@ -72,10 +72,24 @@ class SystemFieldOperator(object):
     """
     __metaclass__ = ABCMeta
 
-    @abstractmethod
     def commutator(self, state):
         """
         Returns the commutator of the system-field operator with the given state
+        """
+        return self.left_multiply(state) - self.right_multiply(state)
+
+    @abstractmethod
+    def left_multiply(self, state):
+        """
+        Returns the left multiplication of the system-field operator with the
+        given state
+        """
+
+    @abstractmethod
+    def right_multiply(self, state):
+        """
+        Returns the left multiplication of the system-field operator with the
+        given state
         """
 
     @abstractmethod
