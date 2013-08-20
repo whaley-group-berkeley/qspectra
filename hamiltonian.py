@@ -2,7 +2,9 @@ from abc import ABCMeta, abstractmethod
 import numpy as np
 import scipy.linalg
 
-from operator_tools import transition_operator, operator_extend, unit_vec
+from operator_tools import (transition_operator, operator_extend, unit_vec,
+                            tensor, extend_vib_operator, vib_create,
+                            vib_annihilate)
 from utils import imemoize, memoized_property, copy_with_new_cache
 
 
@@ -10,7 +12,6 @@ class HamiltonianError(Exception):
     """
     Error class for Hamiltonian errors
     """
-
 
 class Hamiltonian(object):
     """
@@ -237,54 +238,91 @@ class VibronicHamiltonian(Hamiltonian):
         Object which represents the electronic part of the Hamiltonian,
         including its bath.
     n_vibrational_levels : np.ndarray
-        Array giving the number of energy levels to include with each listed
+        Array giving the number of energy levels to include with each
         vibration.
+    vib_energies : np.ndarray
+        Array giving the energies of the vibrational modes.
+    elec_vib_couplings : np.ndarray
+        2D array giving the electronic-vibrational couplings [c_{nm}], where
+        the coupling operators are in the form:
+        c_{nm}*|n><n|*(b(m) + b(m)^\dagger),
+        where |n> is the singly excited electronic state of site n in the full
+        singly excited subspace, and b(m) and b(m)^\dagger are the
+        vibrational annihilation and creation operators for vibration m.
     """
-    def __init__(self, electronic, n_vibrational_levels, *args, **kwargs):
+    def __init__(self, electronic, n_vibrational_levels, vib_energies,
+                 elec_vib_couplings):
         self.electronic = electronic
+        self.energy_offset = self.electronic.energy_offset
         self.bath = self.electronic.bath
         self.n_sites = self.electronic.n_sites
         self.n_vibrational_levels = n_vibrational_levels
+        self.vib_energies = vib_energies
+        self.elec_vib_couplings = elec_vib_couplings
         # save other variables describing the vibrations...
         # persumably replacing *args and **kwargs
 
     @memoized_property
     def n_vibrational_states(self):
+        """
+        Returns the total number of vibrational states in the full vibrational
+        subspace (i.e. the dimension of the full vibrational subspace)
+        """
         return np.prod(self.n_vibrational_levels)
 
     @memoized_property
-    def H_vibrations(self):
+    def H_vibrational(self):
         """
         Returns the Hamiltonian of the vibrations included explicitly in this
         model
         """
-        ########################################################################
-        # fill in some function of self.n_vibrational_levels and other variables
-        # describing the vibrations defined in __init___
-        ########################################################################
+        H_vib = np.diag(np.zeros(self.n_vibrational_states))
+        for m, (num_levels, vib_energy) in \
+        enumerate(zip(self.n_vibrational_levels, self.vib_energies)):
+            vib_operator = np.diag(np.arange(num_levels))
+            H_vib += (vib_energy
+                      *extend_vib_operator(self.n_vibrational_levels, m,
+                                           vib_operator))
+        return H_vib
 
-    def H_system_vibrational_coupling(self, subspace='gef'):
+    def H_electronic_vibrational(self, subspace='gef'):
         """
-        Returns the system-vibrational coupling part of the Hamiltonian
+        Returns the electronic-vibrational coupled part of the Hamiltonian,
+        given by
+        H_{el-vib} = sum_{n,m} c_{nm}*|n><n|*(b(m) + b(m)^\dagger)
+        where |n> is the singly excited electronic state of site n in the full
+        singly excited subspace, and b(m) and b(m)^\dagger are the
+        annihilation and creation operators for vibrational mode m
         """
-        ########################################################################
-        # fill in some sum of kronecker products of
-        # self.electronic.number_operator(site, subspace) and vibrational
-        # operators
-        ########################################################################
+        H_el_vib = np.diag(np.zeros(self.electronic.n_states(subspace)
+                                    *self.n_vibrational_states))
+        for i in np.arange(self.electronic.n_sites):
+            el_operator = self.electronic.number_operator(i, subspace)
+            for m, num_levels in enumerate(self.n_vibrational_levels):
+                vib_operator = (vib_annihilate(num_levels)
+                                + vib_create(num_levels))
+                H_el_vib += (self.elec_vib_couplings[i,m]
+                             *tensor(el_operator,
+                                     extend_vib_operator(
+                                         self.n_vibrational_levels,
+                                         m, vib_operator)))
+        return H_el_vib
 
     @imemoize
     def H(self, subspace='gef'):
         """
-        Returns the system Hamiltonian in the given Hilbert subspace as a matrix
+        Returns the matrix representation of the system Hamiltonian in the
+        given electronic subspace
         """
-        return (np.kron(self.electronic.H(subspace), self.H_vibrations)
-                + self.H_system_vibrational_coupling(subspace))
+        return (self.el_to_sys_operator(self.electronic.H(subspace))
+                + self.vib_to_sys_operator(self.H_vibrational, subspace)
+                + self.H_electronic_vibrational(subspace))
 
     @imemoize
     def ground_state(self, subspace='gef'):
         return np.kron(self.electronic.ground_state(subspace),
-                       thermal_state(self.H_vibrations, self.bath.temperature))
+                       thermal_state(self.H_vibrational,
+                                     self.bath.temperature))
 
     @imemoize
     def in_rotating_frame(self, *args, **kwargs):
@@ -295,22 +333,38 @@ class VibronicHamiltonian(Hamiltonian):
         By default, sets the rotating frame to the central frequency.
         """
         new_hamiltonian = copy_with_new_cache(self)
-        new_hamiltonian.electronic = self.electronic.in_rotating_frame(*args, **kwargs)
+        new_hamiltonian.electronic = (self.electronic.
+                                      in_rotating_frame(*args, **kwargs))
         return new_hamiltonian
 
     def el_to_sys_operator(self, el_operator):
-        return np.kron(el_operator, np.identity(self.n_vibrational_states))
+        """
+        Extends the electronic operator el_operator, which may be in an
+        electronic subspace, into a system operator in that subspace
+        """
+        return tensor(el_operator, np.eye(self.n_vibrational_states))
+    
+    def vib_to_sys_operator(self, vib_operator, subspace='gef'):
+        """
+        Extends the vibrational operator vib_operator, which may be in a
+        vibrational subspace, into a system operator in that subspace
+        and in the given electronic subspace
+        """
+        return tensor(np.eye(self.electronic.n_states(subspace)),
+                             vib_operator)
 
     def dipole_operator(self, *args, **kwargs):
         """
         Return the matrix representation in the given subspace of the requested
         dipole operator
         """
-        return self.el_to_sys_operator(self.electronic.dipole_operator(*args, **kwargs))
+        return self.el_to_sys_operator(self.electronic.
+                                       dipole_operator(*args, **kwargs))
 
     def system_bath_couplings(self, *args, **kwargs):
         """
         Return a list of matrix representations in the given subspace of the
         system-bath coupling operators
         """
-        return self.el_to_sys_operator(self.electronic.system_bath_couplings(*args, **kwargs))
+        return self.el_to_sys_operator(self.electronic.
+                                       system_bath_couplings(*args, **kwargs))
