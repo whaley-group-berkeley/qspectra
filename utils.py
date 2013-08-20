@@ -1,3 +1,4 @@
+import functools
 import numpy as np
 import scipy.integrate
 
@@ -60,3 +61,43 @@ def integrate(f, y0, t, method_name='zvode', f_params=None, save_func=None,
         else:
             raise IntegratorError('integration failed at time {}'.format(t[i]))
     return y
+
+
+class imemoize(object):
+    """
+    Cache the return value of a method
+
+    This class is meant to be used as a decorator of methods. The return value
+    from a given method invocation will be cached on the instance whose method
+    was invoked. All arguments passed to the decorated method decorated must be
+    be hashable.
+
+    Source (MIT Licensed)
+    --------------------
+        http://code.activestate.com/recipes/
+        577452-a-memoize-decorator-for-instance-methods/
+    """
+    def __init__(self, func):
+        self.func = func
+
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self.func
+        return functools.partial(self, obj)
+
+    def __call__(self, *args, **kw):
+        obj = args[0]
+        try:
+            cache = obj.__cache
+        except AttributeError:
+            cache = obj.__cache = {}
+        key = (self.func, args[1:], frozenset(kw.items()))
+        try:
+            res = cache[key]
+        except KeyError:
+            res = cache[key] = self.func(*args, **kw)
+        return res
+
+
+def memoized_property(x):
+    return property(imemoize(x))
