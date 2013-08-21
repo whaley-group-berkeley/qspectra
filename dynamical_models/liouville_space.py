@@ -1,8 +1,8 @@
 from collections import OrderedDict
 import numpy as np
 
-from dynamics import DynamicalModel, SystemOperator
-from utils import memoized_property
+from .generic import DynamicalModel, SystemOperator
+from ..utils import memoized_property
 
 
 class SubspaceError(Exception):
