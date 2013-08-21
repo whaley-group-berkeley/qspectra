@@ -1,11 +1,11 @@
 import numpy as np
 
-from dynamics import DynamicalModel
-from operator_tools import basis_transform
-from liouville_space import (den_to_vec, extract_subspace,
-                             super_commutator_matrix, tensor_to_super,
-                             liouville_subspace_indices, LiouvilleSpaceOperator)
-from utils import memoized_property
+from .generic import DynamicalModel
+from ..operator_tools import basis_transform
+from .liouville_space import (den_to_vec, extract_subspace,
+                              super_commutator_matrix, tensor_to_super,
+                              liouville_subspace_indices, LiouvilleSpaceOperator)
+from ..utils import memoized_property
 
 
 def redfield_tensor(hamiltonian, subspace='ge', secular=True,
