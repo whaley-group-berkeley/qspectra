@@ -198,7 +198,7 @@ class ElectronicHamiltonian(object):
             rw_freq = self.mean_excitation_freq
         shift = rw_freq - self.energy_offset
         H_1 = self.H_1 - shift * np.identity(len(self.H_1))
-        ref_system = (self.ref_system.to_rotating_frame(rw_freq)
+        ref_system = (self.ref_system.in_rotating_frame(rw_freq)
                       if (self.ref_system is not self) else None)
         return type(self)(H_1, rw_freq, self.disorder_fwhm, ref_system,
                           self.sampling_freq_extra)
