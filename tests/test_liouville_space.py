@@ -2,7 +2,7 @@ from numpy.testing import assert_allclose, assert_equal
 import unittest
 import numpy as np
 
-import qspectra.liouville_space as liouville_space
+import qspectra.dynamical_models.liouville_space as liouville_space
 
 
 class TestSubspaces(unittest.TestCase):
