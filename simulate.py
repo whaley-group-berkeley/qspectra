@@ -86,7 +86,7 @@ def impulsive_probe(dynamical_model, rho_pump, time_max, polarization='xx',
     """
     t = np.arange(0, time_max, dynamical_model.time_step)
     signal = np.zeros(t.shape, complex)
-    rho_pump -= dynamical_model.ground_state(rho_pump_liouv_subspace)
+    rho2 = rho_pump - dynamical_model.ground_state(rho_pump_liouv_subspace)
     for sim_subspace in ['eg', 'fe']:
         V2 = dynamical_model.dipole_create(rho_pump_liouv_subspace + '->'
                                            + sim_subspace, polarization[0])
