@@ -39,10 +39,10 @@ def redfield_tensor(hamiltonian, subspace='ge', secular=True,
     ----------
     Nitzan
     """
-    n_states = hamiltonian.system.n_states(subspace)
-    energies = hamiltonian.system.E(subspace)
+    n_states = hamiltonian.n_states(subspace)
+    energies = hamiltonian.E(subspace)
 
-    K = [basis_transform(coupling, hamiltonian.system.U(subspace))
+    K = [basis_transform(coupling, hamiltonian.U(subspace))
          for coupling in hamiltonian.system_bath_couplings(subspace)]
     xi = np.einsum('iab,icd->abcd', K, K)
 
@@ -87,11 +87,11 @@ def redfield_dissipator(*args, **kwargs):
 
 
 def redfield_evolve(hamiltonian, subspace='ge', basis='site', **kwargs):
-    H = np.diag(hamiltonian.system.E(subspace))
+    H = np.diag(hamiltonian.E(subspace))
     R = redfield_dissipator(hamiltonian, subspace, **kwargs)
     L = -1j * super_commutator_matrix(H) - R
     if basis == 'site':
-        return basis_transform(L, hamiltonian.system.U(subspace).T.conj())
+        return basis_transform(L, hamiltonian.U(subspace).T.conj())
     elif basis == 'exciton':
         return L
     else:
@@ -120,10 +120,11 @@ class RedfieldModel(LiouvilleSpaceModel):
         unit_convert : number, optional
             Unit conversion from energy to time units (default 1).
         secular : boolean, default True
-            Whether to employ the secular approximation and Bloch model to neglect
-            all terms other than coherence decay and population transfer
+            Whether to employ the secular approximation and Bloch model to
+            neglect all terms other than coherence decay and population transfer
         discard_imag_corr : boolean, default False
-            Whether to discard the imaginary part of the bath correlation functions
+            Whether to discard the imaginary part of the bath correlation
+            functions
 
         References
         ----------
@@ -149,9 +150,17 @@ class RedfieldModel(LiouvilleSpaceModel):
         """
         index = liouville_subspace_indices(liouville_subspace,
                                            self.hilbert_subspace,
-                                           self.hamiltonian.system.n_sites)
+                                           self.hamiltonian.n_sites)
         mesh = np.ix_(index, index)
         evolve_matrix = self.redfield_super_operator[mesh]
         def eom(t, rho):
             return evolve_matrix.dot(rho)
         return eom
+
+    @property
+    def time_step(self):
+        """
+        The default time step at which to sample the equation of motion (in the
+        rotating frame)
+        """
+        return self.hamiltonian.time_step / self.unit_convert
