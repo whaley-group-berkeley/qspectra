@@ -1,10 +1,10 @@
 import numpy as np
 
-from .generic import DynamicalModel
 from ..operator_tools import basis_transform
 from .liouville_space import (den_to_vec, extract_subspace,
                               super_commutator_matrix, tensor_to_super,
-                              liouville_subspace_indices, LiouvilleSpaceOperator)
+                              liouville_subspace_indices,
+                              LiouvilleSpaceModel, LiouvilleSpaceOperator)
 from ..utils import memoized_property
 
 
@@ -98,9 +98,9 @@ def redfield_evolve(hamiltonian, subspace='ge', basis='site', **kwargs):
         raise ValueError('invalid basis')
 
 
-class RedfieldModel(DynamicalModel):
-    def __init__(self, hamiltonian, rw_freq=None, subspace='gef',
-                 unit_convert=1, **redfield_evolve_kwargs):
+class RedfieldModel(LiouvilleSpaceModel):
+    def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
+                 unit_convert=1, secular=True, discard_imag_corr=False):
         """
         DynamicalModel for Redfield theory
 
@@ -114,50 +114,32 @@ class RedfieldModel(DynamicalModel):
             Rotating wave frequency at which to calculate dynamics. By default,
             the rotating wave frequency is chosen from the central frequency
             of the Hamiltonian.
-        subspace : container, default 'ge'
+        hilbert_subspace : container, default 'ge'
             Container of any or all of 'g', 'e' and 'f' indicating the desired
-            subspaces on which to calculate the Redfield tensor.
+            Hilbert subspace on which to calculate the Redfield tensor.
         unit_convert : number, optional
             Unit conversion from energy to time units (default 1).
-        basis : 'site' or 'exciton', optional
-            Basis in which to simulate dynamics (default 'site')
         secular : boolean, default True
             Whether to employ the secular approximation and Bloch model to neglect
             all terms other than coherence decay and population transfer
         discard_imag_corr : boolean, default False
             Whether to discard the imaginary part of the bath correlation functions
 
-        Returns
-        -------
-        out : np.ndarray
-            Four dimensional array given the Redfield transfer rates between
-            density matrix elements in the system energy eigenbasis
-
         References
         ----------
         Nitzan (2006)
         """
-        self.hamiltonian = hamiltonian.in_rotating_frame(rw_freq)
-        self.rw_freq = self.hamiltonian.system.energy_offset
-        self.subspace = subspace
+        super(RedfieldModel, self).__init__(hamiltonian, rw_freq, hilbert_subspace)
         self.unit_convert = unit_convert
-        self.redfield_evolve_kwargs = redfield_evolve_kwargs
-
-    def ground_state(self, liouville_subspace):
-        """
-        Return the ground state in the given Liouville subspace
-        """
-        psi0 = self.hamiltonian.system.ground_state(self.subspace)
-        rho0 = psi0.conj().reshape(1, -1) * psi0.reshape(-1, 1)
-        index = liouville_subspace_indices(liouville_subspace, self.subspace,
-                                           self.hamiltonian.system.n_sites)
-        return den_to_vec(rho0)[index]
+        self.secular = secular
+        self.discard_imag_corr = discard_imag_corr
 
     @memoized_property
     def redfield_super_operator(self):
         return (self.unit_convert
-                * redfield_evolve(self.hamiltonian, self.subspace,
-                                  **self.redfield_evolve_kwargs))
+                * redfield_evolve(self.hamiltonian, self.hilbert_subspace,
+                                  basis='site', secular=self.secular,
+                                  discard_imag_corr=self.discard_imag_corr))
 
     def equation_of_motion(self, liouville_subspace):
         """
@@ -165,37 +147,11 @@ class RedfieldModel(DynamicalModel):
         subspace, a function which takes a state vector and returns its first
         time derivative, for use in a numerical integration routine
         """
-        index = liouville_subspace_indices(liouville_subspace, self.subspace,
+        index = liouville_subspace_indices(liouville_subspace,
+                                           self.hilbert_subspace,
                                            self.hamiltonian.system.n_sites)
         mesh = np.ix_(index, index)
-        evolve = self.redfield_super_operator[mesh]
+        evolve_matrix = self.redfield_super_operator[mesh]
         def eom(t, rho):
-            return evolve.dot(rho)
+            return evolve_matrix.dot(rho)
         return eom
-
-    def dipole_operator(self, liouv_subspace_map, polarization, include_transitions):
-        operator = self.hamiltonian.dipole_operator(self.subspace, polarization,
-                                                    include_transitions)
-        return LiouvilleSpaceOperator(operator, self.subspace, liouv_subspace_map)
-
-    def dipole_destroy(self, liouville_subspace_map, polarization):
-        """
-        Return a dipole annhilation operator that follows the SystemOperator API
-        for the given subspace and polarization
-        """
-        return self.dipole_operator(liouville_subspace_map, polarization, '-')
-
-    def dipole_create(self, liouville_subspace_map, polarization):
-        """
-        Return a dipole creation operator that follows the SystemOperator
-        API for the given liouville_subspace_map and polarization
-        """
-        return self.dipole_operator(liouville_subspace_map, polarization, '+')
-
-    @property
-    def time_step(self):
-        """
-        The default time step at which to sample the equation of motion (in the
-        rotating frame)
-        """
-        return self.hamiltonian.time_step / self.unit_convert
