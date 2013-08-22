@@ -2,31 +2,15 @@ from numpy.testing import assert_allclose, assert_equal
 import unittest
 import numpy as np
 
+from qspectra.hamiltonian import ElectronicHamiltonian
 import qspectra.dynamical_models.liouville_space as liouville_space
 
 
 class TestSubspaces(unittest.TestCase):
     def test_n_excitations(self):
-        self.assertEquals(liouville_space.n_excitations(1), [1, 1, 0])
-        self.assertEquals(liouville_space.n_excitations(2), [1, 2, 1])
-        self.assertEquals(liouville_space.n_excitations(3), [1, 3, 3])
-
-    def test_n_states_from_n_sites(self):
-        self.assertEquals(liouville_space.n_states_from_n_sites(1), 2)
-        self.assertEquals(liouville_space.n_states_from_n_sites(2), 4)
-        self.assertEquals(liouville_space.n_states_from_n_sites(3), 7)
-        self.assertEquals(liouville_space.n_states_from_n_sites(3, 'g'), 1)
-        self.assertEquals(liouville_space.n_states_from_n_sites(3, 'ef'), 6)
-        self.assertEquals(liouville_space.n_states_from_n_sites(3, 'ge'), 4)
-
-    def test_n_sites_from_n_states(self):
-        self.assertEquals(liouville_space.n_sites_from_n_states(2), 1)
-        self.assertEquals(liouville_space.n_sites_from_n_states(4), 2)
-        self.assertEquals(liouville_space.n_sites_from_n_states(7), 3)
-        self.assertEquals(liouville_space.n_sites_from_n_states(6, 'ef'), 3)
-        self.assertEquals(liouville_space.n_sites_from_n_states(4, 'ge'), 3)
-        with self.assertRaises(liouville_space.SubspaceError):
-            liouville_space.n_sites_from_n_states(1, 'g')
+        assert_equal(liouville_space.n_excitations(1), [1, 1, 0])
+        assert_equal(liouville_space.n_excitations(2), [1, 2, 1])
+        assert_equal(liouville_space.n_excitations(3), [1, 3, 3])
 
     def test_extract_subspace(self):
         self.assertItemsEqual(liouville_space.extract_subspace('gg,eg->gg'),
@@ -46,6 +30,13 @@ class TestSubspaces(unittest.TestCase):
             [0, 5, 6, 9, 10, 15])
         with self.assertRaises(liouville_space.SubspaceError):
             liouville_space.liouville_subspace_indices('ef', 'ge', 2)
+        # test >1 vibrations:
+        assert_equal(
+            liouville_space.liouville_subspace_indices('gg', 'ge', 1, 2),
+            [0, 1, 4, 5])
+        assert_equal(
+            liouville_space.liouville_subspace_indices('eg', 'ge', 1, 2),
+            [2, 3, 6, 7])
 
 
 class TestSuperOperators(unittest.TestCase):
@@ -86,13 +77,14 @@ class TestSuperOperators(unittest.TestCase):
 class TestLiouvilleSpaceOperator(unittest.TestCase):
     def test(self):
         X = np.array([[1, 2], [3, 4]])
-        L = liouville_space.LiouvilleSpaceOperator(X, 'ge', 'gg,eg,ge,ee->gg')
+        H = ElectronicHamiltonian([[0]])
+        L = liouville_space.LiouvilleSpaceOperator(X, 'ge', 'gg,eg,ge,ee->gg', H)
         assert_allclose(L.left_multiply([1, 10, 100, 1000]), [21])
         assert_allclose(L.right_multiply([1, 10, 100, 1000]), [301])
         assert_allclose(L.commutator([1, 10, 100, 1000]), [-280])
         assert_allclose(L.expectation_value([1, 10, 100, 1000]), [21])
-        L = liouville_space.LiouvilleSpaceOperator(X, 'ge', 'ee->gg,ee')
+        L = liouville_space.LiouvilleSpaceOperator(X, 'ge', 'ee->gg,ee', H)
         assert_allclose(L.left_multiply([1]), [0, 4])
         assert_allclose(L.expectation_value([1]), 4)
-        L = liouville_space.LiouvilleSpaceOperator(X, 'ge', 'ee->gg,ge,eg,ee')
+        L = liouville_space.LiouvilleSpaceOperator(X, 'ge', 'ee->gg,ge,eg,ee', H)
         assert_allclose(L.expectation_value([1]), 4)

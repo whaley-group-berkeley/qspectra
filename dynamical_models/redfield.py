@@ -150,7 +150,8 @@ class RedfieldModel(LiouvilleSpaceModel):
         """
         index = liouville_subspace_indices(liouville_subspace,
                                            self.hilbert_subspace,
-                                           self.hamiltonian.n_sites)
+                                           self.hamiltonian.n_sites,
+                                           self.hamiltonian.n_vibrational_states)
         mesh = np.ix_(index, index)
         evolve_matrix = self.redfield_super_operator[mesh]
         def eom(t, rho):

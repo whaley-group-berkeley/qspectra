@@ -10,33 +10,13 @@ class SubspaceError(Exception):
     Error class to indicate an invalid subspace
     """
 
+
 def n_excitations(n_sites):
-    return [1, n_sites, int(n_sites * (n_sites - 1) / 2)]
-
-
-def n_states_from_n_sites(n_sites, subspace='gef'):
     """
-    Returns the number of states from the number of sites
+    Given a number of sites, returns the number of 0-, 1- and 2-excitation
+    states as a three item array
     """
-    return sum(n_states for excitation, n_states
-               in zip('gef', n_excitations(n_sites)) if excitation in subspace)
-
-
-def n_sites_from_n_states(n_states, subspace='gef'):
-    """
-    Returns the number of sites from the number of states
-    """
-    g, e, f = [int(exc in subspace) for exc in 'gef']
-    if f:
-        # N = g + e * x + f * x * (x - 1) / 2
-        return int((-2 * e + f
-                    + np.sqrt((-2 * e + f) ** 2 - 8 * f * (g - n_states)))
-                   / (2 * f))
-    elif e:
-        return n_states - g
-    else:
-        raise SubspaceError('cannot determine the number of site states from '
-                            'only the number of ground states')
+    return np.array([1, n_sites, int(n_sites * (n_sites - 1) / 2)])
 
 
 def extract_subspace(subspaces_string):
@@ -48,14 +28,15 @@ def extract_subspace(subspaces_string):
 
 
 def liouville_subspace_indices(liouville_subspace, subspace, n_sites,
-                               n_vibrations=1):
+                               n_vibrational_states=1):
     """
     Returns indices of the full vectorized density operator in the given
     subspace that are included in the indicated liouville subspace
     """
     total_states = 0
     cuts = {}
-    for excitation, n_states in zip('gef', n_excitations(n_sites)):
+    exc_n_states = n_vibrational_states * n_excitations(n_sites)
+    for excitation, n_states in zip('gef', exc_n_states):
         if excitation in subspace:
             cuts[excitation] = np.arange(n_states) + total_states
             total_states += n_states
@@ -184,18 +165,20 @@ class LiouvilleSpaceModel(DynamicalModel):
         rho0 = self.hamiltonian.ground_state(self.hilbert_subspace)
         index = liouville_subspace_indices(liouville_subspace,
                                            self.hilbert_subspace,
-                                           self.hamiltonian.n_sites)
+                                           self.hamiltonian.n_sites,
+                                           self.hamiltonian.n_vibrational_states)
         return den_to_vec(rho0)[index]
 
     def dipole_operator(self, liouv_subspace_map, polarization, transitions):
         operator = self.hamiltonian.dipole_operator(self.hilbert_subspace,
                                                     polarization, transitions)
         return LiouvilleSpaceOperator(operator, self.hilbert_subspace,
-                                      liouv_subspace_map)
+                                      liouv_subspace_map, self.hamiltonian)
 
 
 class LiouvilleSpaceOperator(SystemOperator):
-    def __init__(self, operator, operator_subspace, liouv_subspace_map):
+    def __init__(self, operator, operator_subspace, liouv_subspace_map,
+                 hamiltonian):
         """
         Parameters
         ----------
@@ -211,14 +194,18 @@ class LiouvilleSpaceOperator(SystemOperator):
             only one Liouville subspace may be provided (e.g., a string of the
             form 'eg,fe'), in which case the super operator is assumed to map
             from and to the same subspace.
+        hamiltonian : hamiltonian.Hamiltonian
+            Hamiltonian on which this operator acts
         """
         self.operator = operator
+        self.hamiltonian = hamiltonian
         liouv_subspaces = (liouv_subspace_map.split('->')
                            if '->' in liouv_subspace_map
                            else [liouv_subspace_map, liouv_subspace_map])
-        n_sites = n_sites_from_n_states(len(operator), operator_subspace)
         self.from_indices, self.to_indices = [
-            liouville_subspace_indices(liouv_subspace, operator_subspace, n_sites)
+            liouville_subspace_indices(liouv_subspace, operator_subspace,
+                                       self.hamiltonian.n_sites,
+                                       self.hamiltonian.n_vibrational_states)
             for liouv_subspace in liouv_subspaces]
         self.super_op_mesh = np.ix_(self.to_indices, self.from_indices)
 
