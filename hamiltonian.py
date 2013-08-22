@@ -151,6 +151,7 @@ class ElectronicHamiltonian(Hamiltonian):
         self.bath = bath
         self.dipoles = dipoles
         self.energy_spread_extra = energy_spread_extra
+        self.n_vibrational_states = 1
 
     @property
     def n_sites(self):
@@ -192,9 +193,6 @@ class ElectronicHamiltonian(Hamiltonian):
         new_hamiltonian.energy_offset = rw_freq
         return new_hamiltonian
 
-        # return type(self)(H_1exc, rw_freq, self.bath, self.dipoles,
-        #                   self.energy_spread_extra)
-
     def dipole_operator(self, subspace='gef', polarization='x',
                         transitions='-+'):
         """
@@ -208,6 +206,12 @@ class ElectronicHamiltonian(Hamiltonian):
         return np.einsum('nij,nk,k->ij', trans_ops, self.dipoles,
                          polarization_vector(polarization))
 
+    def number_operator(self, site, subspace='gef'):
+        """
+        Returns the number operator a_n^\dagger a_n for site n
+        """
+        return operator_extend(np.diag(unit_vec(site, self.n_sites)), subspace)
+
     def system_bath_couplings(self, subspace='gef'):
         """
         Return a list of matrix representations in the given subspace of the
@@ -215,8 +219,7 @@ class ElectronicHamiltonian(Hamiltonian):
         """
         if self.bath is None:
             raise HamiltonianError('bath undefined')
-        return [operator_extend(np.diag(unit_vec(n, self.n_sites)), subspace)
-                for n in xrange(self.n_sites)]
+        return [self.number_operator(n, subspace) for n in xrange(self.n_sites)]
 
 
 def thermal_state(hamiltonian_matrix, temperature):
@@ -224,42 +227,29 @@ def thermal_state(hamiltonian_matrix, temperature):
     return rho / np.trace(rho)
 
 
-class VibronicHamiltonian(ElectronicHamiltonian):
+class VibronicHamiltonian(Hamiltonian):
     """
-    Hamiltonian for an electronic system with coupling to an external field
-    and an identical bath at each pigment
+    Hamiltonian which extends an electronic Hamiltonian to include explicit
+    vibrations
 
     Properties
     ----------
-    H_1exc : np.ndarray
-        Matrix representation of this hamiltonian in the 1-excitation subspace
-    energy_offset : number, optional
-        Constant energy offset of the diagonal entries in H_1exc from the ground
-        state energy.
-    vibration_energies : np.ndarray
-        Array listing the transition energies of each included vibration.
+    electronic : ElectronicHamiltonian
+        Object which represents the electronic part of the Hamiltonian,
+        including its bath.
     n_vibrational_levels : np.ndarray
         Array giving the number of energy levels to include with each listed
         vibration.
-    bath : bath.Bath, optional
-        Object containing the bath information (i.e., correlation function and
-        temperature). Each site is assumed to be linearly coupled to an
-        identical bath of this form.
-    dipoles : np.ndarray, optional
-        n x 3 array of dipole moments for each site.
-    energy_spread_extra : float, optional (default 100)
-        Default extra frequency to add to the spread of energies when
-        determining the frequency step size automatically.
     """
-    def __init__(self, H_1exc, energy_offset=0, vibration_energies=None,
-                 n_vibrational_levels=None, bath=None, dipoles=None,
-                 energy_spread_extra=100.0):
-        super(VibronicHamiltonian, self).__init__(self, H_1exc, energy_offset,
-                                                  bath, dipoles,
-                                                  energy_spread_extra)
-        self.vibration_energies = vibration_energies
+    def __init__(self, electronic, n_vibrational_levels, *args, **kwargs):
+        self.electronic = electronic
+        self.bath = self.electronic.bath
+        self.n_sites = self.electronic.n_sites
         self.n_vibrational_levels = n_vibrational_levels
+        # save other variables describing the vibrations...
+        # persumably replacing *args and **kwargs
 
+    @memoized_property
     def n_vibrational_states(self):
         return np.prod(self.n_vibrational_levels)
 
@@ -269,36 +259,47 @@ class VibronicHamiltonian(ElectronicHamiltonian):
         Returns the Hamiltonian of the vibrations included explicitly in this
         model
         """
-        #############################################################
-        # fill in some function of self.vibration_energies and      #
-        # self.n_vibrational_levels                                 #
-        #############################################################
+        ########################################################################
+        # fill in some function of self.n_vibrational_levels and other variables
+        # describing the vibrations defined in __init___
+        ########################################################################
+
+    def H_system_vibrational_coupling(self, subspace='gef'):
+        """
+        Returns the system-vibrational coupling part of the Hamiltonian
+        """
+        ########################################################################
+        # fill in some sum of kronecker products of
+        # self.electronic.number_operator(site, subspace) and vibrational
+        # operators
+        ########################################################################
 
     @imemoize
-    def ground_state(self, subspace):
-        return np.kron(super(VibronicHamiltonian, self).ground_state(subspace),
-                       thermal_state(self.H_vibrations, self.bath.temperature))
-
-    @imemoize
-    def H(self, subspace):
+    def H(self, subspace='gef'):
         """
         Returns the system Hamiltonian in the given Hilbert subspace as a matrix
         """
-        return np.kron(super(VibronicHamiltonian, self).H(subspace),
-                       self.H_vibrations)
+        return (np.kron(self.electronic.H(subspace), self.H_vibrations)
+                + self.H_system_vibrational_coupling(subspace))
 
     @imemoize
-    def in_rotating_frame(self, rw_freq=None):
+    def ground_state(self, subspace='gef'):
+        return np.kron(self.electronic.ground_state(subspace),
+                       thermal_state(self.H_vibrations, self.bath.temperature))
+
+    @imemoize
+    def in_rotating_frame(self, *args, **kwargs):
         """
         Returns a new Hamiltonian shifted to the rotating frame at the given
         frequency
 
         By default, sets the rotating frame to the central frequency.
         """
-        return type(self)(H_1exc, rw_freq, self.bath, self.dipoles,
-                          self.energy_spread_extra)
+        new_hamiltonian = copy_with_new_cache(self)
+        new_hamiltonian.electronic = self.electronic.in_rotating_frame(*args, **kwargs)
+        return new_hamiltonian
 
-    def electronic_to_system_operator(self, el_operator):
+    def el_to_sys_operator(self, el_operator):
         return np.kron(el_operator, np.identity(self.n_vibrational_states))
 
     def dipole_operator(self, *args, **kwargs):
@@ -306,14 +307,11 @@ class VibronicHamiltonian(ElectronicHamiltonian):
         Return the matrix representation in the given subspace of the requested
         dipole operator
         """
-        return self.electronic_to_system_operator(
-            super(VibronicHamiltonian, self).dipole_operator(*args, **kwargs))
+        return self.el_to_sys_operator(self.electronic.dipole_operator(*args, **kwargs))
 
     def system_bath_couplings(self, *args, **kwargs):
         """
         Return a list of matrix representations in the given subspace of the
         system-bath coupling operators
         """
-        return self.electronic_to_system_operator(
-            super(VibronicHamiltonian, self).system_bath_couplings(*args, **kwargs))
-
+        return self.el_to_sys_operator(self.electronic.system_bath_couplings(*args, **kwargs))
