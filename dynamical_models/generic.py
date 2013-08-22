@@ -38,18 +38,26 @@ class DynamicalModel(object):
         """
 
     @abstractmethod
-    def dipole_destroy(self, liouville_subspace_map, polarization):
+    def dipole_operator(self, liouv_subspace_map, polarization,
+                        include_transitions):
         """
-        Return a dipole annhilation operator that follows the
-        SystemOperator API for the given liouville_subspace_map and polarization
+        Return a dipole operator that follows the SystemOperator API for the
+        given liouville_subspace_map, polarization and requested transitions
         """
 
-    @abstractmethod
+    def dipole_destroy(self, liouville_subspace_map, polarization):
+        """
+        Return a dipole annhilation operator that follows the SystemOperator API
+        for the given subspace and polarization
+        """
+        return self.dipole_operator(liouville_subspace_map, polarization, '-')
+
     def dipole_create(self, liouville_subspace_map, polarization):
         """
         Return a dipole creation operator that follows the SystemOperator
         API for the given liouville_subspace_map and polarization
         """
+        return self.dipole_operator(liouville_subspace_map, polarization, '+')
 
     @abstractproperty
     def time_step(self):
