@@ -172,11 +172,12 @@ class ElectronicHamiltonian(object):
     def ground_state(self, subspace):
         """
         Returns the wave-function for the ground state of this Hamiltonian as
-        a state vector in Hilbert space
+        a density operator
         """
-        state = np.zeros(self.n_states(subspace), dtype=complex)
+        N = self.n_states(subspace)
+        state = np.zeros((N, N), dtype=complex)
         if 'g' in subspace:
-            state[0] = 1.0
+            state[0, 0] = 1.0
         return state
 
     @property
