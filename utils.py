@@ -1,3 +1,4 @@
+from copy import copy
 from numpy import pi
 import functools
 import numpy as np
@@ -158,6 +159,19 @@ class imemoize(object):
         except KeyError:
             res = cache[key] = self.func(*args, **kw)
         return res
+
+
+def copy_with_new_cache(obj):
+    """
+    Return a shallow copy of the provided object, resetting the cache as used by
+    imemoize (if present)
+    """
+    new_obj = copy(obj)
+    try:
+        del new_obj._imemoize__cache
+    except AttributeError:
+        pass
+    return new_obj
 
 
 def memoized_property(x):
