@@ -174,47 +174,24 @@ class LiouvilleSpaceModel(DynamicalModel):
         Nitzan (2006)
         """
         self.hamiltonian = hamiltonian.in_rotating_frame(rw_freq)
-        self.rw_freq = self.hamiltonian.system.energy_offset
+        self.rw_freq = self.hamiltonian.energy_offset
         self.hilbert_subspace = hilbert_subspace
 
     def ground_state(self, liouville_subspace):
         """
         Return the ground state in the given Liouville subspace
         """
-        rho0 = self.hamiltonian.system.ground_state(self.hilbert_subspace)
+        rho0 = self.hamiltonian.ground_state(self.hilbert_subspace)
         index = liouville_subspace_indices(liouville_subspace,
                                            self.hilbert_subspace,
-                                           self.hamiltonian.system.n_sites)
+                                           self.hamiltonian.n_sites)
         return den_to_vec(rho0)[index]
 
-    def dipole_operator(self, liouv_subspace_map, polarization, include_transitions):
+    def dipole_operator(self, liouv_subspace_map, polarization, transitions):
         operator = self.hamiltonian.dipole_operator(self.hilbert_subspace,
-                                                    polarization,
-                                                    include_transitions)
+                                                    polarization, transitions)
         return LiouvilleSpaceOperator(operator, self.hilbert_subspace,
                                       liouv_subspace_map)
-
-    def dipole_destroy(self, liouville_subspace_map, polarization):
-        """
-        Return a dipole annhilation operator that follows the SystemOperator API
-        for the given subspace and polarization
-        """
-        return self.dipole_operator(liouville_subspace_map, polarization, '-')
-
-    def dipole_create(self, liouville_subspace_map, polarization):
-        """
-        Return a dipole creation operator that follows the SystemOperator
-        API for the given liouville_subspace_map and polarization
-        """
-        return self.dipole_operator(liouville_subspace_map, polarization, '+')
-
-    @property
-    def time_step(self):
-        """
-        The default time step at which to sample the equation of motion (in the
-        rotating frame)
-        """
-        return self.hamiltonian.time_step / self.unit_convert
 
 
 class LiouvilleSpaceOperator(SystemOperator):

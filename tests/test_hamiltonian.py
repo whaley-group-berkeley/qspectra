@@ -8,12 +8,10 @@ from qspectra import hamiltonian
 class TestElectronicHamiltonian(unittest.TestCase):
     def setUp(self):
         self.M = np.array([[1., 0], [0, 3]])
-        self.H_el = hamiltonian.ElectronicHamiltonian(self.M, 0, 1, None, 1.0)
+        self.H_el = hamiltonian.ElectronicHamiltonian(self.M, 0, None, None, 1.0)
 
     def test_properties(self):
-        self.assertEqual(self.H_el.disorder_fwhm, 1.0)
-        self.assertEqual(self.H_el.ref_system, self.H_el)
-        self.assertEqual(self.H_el.sampling_freq_extra, 1)
+        self.assertEqual(self.H_el.energy_spread_extra, 1)
         self.assertEqual(self.H_el.n_sites, 2)
         self.assertEqual(self.H_el.n_states('gef'), 4)
         self.assertEqual(self.H_el.freq_step, 10.0)
@@ -23,6 +21,10 @@ class TestElectronicHamiltonian(unittest.TestCase):
         assert_allclose(self.H_el.E('ge'), [0, 1, 3])
         assert_allclose(self.H_el.E('gef'), [0, 1, 3, 4])
         self.assertEqual(self.H_el.mean_excitation_freq, 2)
+        with self.assertRaises(hamiltonian.HamiltonianError):
+            self.H_el.dipole_operator()
+        with self.assertRaises(hamiltonian.HamiltonianError):
+            self.H_el.system_bath_couplings()
 
     def test_rotating_frame(self):
         H_rw = self.H_el.in_rotating_frame(2)
@@ -35,7 +37,7 @@ class TestElectronicHamiltonian(unittest.TestCase):
         self.assertEqual(H_rw2.mean_excitation_freq, 2)
         assert_allclose(H_rw2.H('e'), [[-2, 0], [0, 0]])
 
-    def test_sample(self):
-        H_sampled = list(self.H_el.sample(1))[0]
-        self.assertEqual(self.H_el, H_sampled.ref_system)
-        self.assertEqual(H_sampled.disorder_fwhm, 0.0)
+    def test_thermal_state(self):
+        assert_allclose(hamiltonian.thermal_state(self.H_el.H_1exc, 2),
+                        1 / (np.exp(0.5) + np.exp(-0.5)) *
+                        np.array([[np.exp(0.5), 0], [0, np.exp(-0.5)]]))
