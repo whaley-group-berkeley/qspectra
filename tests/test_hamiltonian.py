@@ -36,3 +36,8 @@ class TestElectronicHamiltonian(unittest.TestCase):
         H_rw2 = self.H_el.in_rotating_frame(3)
         self.assertEqual(H_rw2.mean_excitation_freq, 2)
         assert_allclose(H_rw2.H('e'), [[-2, 0], [0, 0]])
+
+    def test_thermal_state(self):
+        assert_allclose(hamiltonian.thermal_state(self.H_el.H_1exc, 2),
+                        1 / (np.exp(0.5) + np.exp(-0.5)) *
+                        np.array([[np.exp(0.5), 0], [0, np.exp(-0.5)]]))
