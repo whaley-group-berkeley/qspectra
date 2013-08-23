@@ -52,6 +52,41 @@ def simulate_pump(dynamical_model, pump, polarization, time_extra=0,
     return (t, states)
 
 
+def linear_response(dynamical_model, time_max, polarization='xx',
+                    **integrate_kwargs):
+    """
+    Returns the linear response function
+
+    Parameters
+    ----------
+    dynamical_model : DynamicalModel
+        Object obeying the DynamicModel API.
+    time_max : number
+        Maximum time for which to simulate dynamics between the probe and signal
+        interactions.
+    polarization : iterable, default 'xx'
+        Two item iterable giving the polarization of the last two system-field
+        interactions as strings or 3D arrays
+
+    Returns
+    -------
+    t : np.ndarray
+        Times at which the signal was simulated.
+    signal : np.ndarray
+        One-dimensional array containing the simulated complex valued electric
+        field of the signal.
+    """
+    t = np.arange(0, time_max, dynamical_model.time_step)
+    rho0 = dynamical_model.ground_state('gg')
+    V1 = dynamical_model.dipole_create('gg->eg', polarization[0])
+    V1_rho = V1.commutator(rho0)
+    eom = dynamical_model.equation_of_motion('eg')
+    V2 = dynamical_model.dipole_destroy('eg->gg', polarization[1])
+    signal = -integrate(eom, V1_rho, t, save_func=V2.expectation_value,
+                        **integrate_kwargs)
+    return (t, signal)
+
+
 def impulsive_probe(dynamical_model, rho_pump, time_max, polarization='xx',
                     rho_pump_liouv_subspace='gg,ge,eg,ee', **integrate_kwargs):
     """
@@ -69,7 +104,7 @@ def impulsive_probe(dynamical_model, rho_pump, time_max, polarization='xx',
     time_max : number
         Maximum time for which to simulate dynamics between the probe and signal
         interactions.
-    polarization : iterable
+    polarization : iterable, default 'xx'
         Two item iterable giving the polarization of the last two system-field
         interactions as strings or 3D arrays
     rho_pump_liouv_subspace : string, optional
