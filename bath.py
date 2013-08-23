@@ -54,10 +54,10 @@ class ArbitraryBath(Bath):
 
 
 class UncoupledBath(Bath):
-    def corr_func_complex(self, x):
+    def corr_func_complex(self, _):
         return 0 + 0j
 
-    def spectral_density_func(self, x):
+    def spectral_density_func(self, _):
         return 0
 
     @property

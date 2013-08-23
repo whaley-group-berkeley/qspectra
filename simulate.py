@@ -90,7 +90,7 @@ def impulsive_probe(dynamical_model, rho_pump, time_max, polarization='xx',
     for sim_subspace in ['eg', 'fe']:
         V2 = dynamical_model.dipole_create(rho_pump_liouv_subspace + '->'
                                            + sim_subspace, polarization[0])
-        V2_rho = V2.commutator(rho_pump)
+        V2_rho = V2.commutator(rho2)
         eom = dynamical_model.equation_of_motion(sim_subspace)
         V3 = dynamical_model.dipole_destroy(sim_subspace + '->gg,ee',
                                             polarization[1])
