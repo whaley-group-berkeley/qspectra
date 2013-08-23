@@ -12,24 +12,26 @@ class Bath(object):
     spectral_density : SpectralDensity
         Spectral density of the bath.
     """
-    def corr_func_real(self, x):
-        """
-        Correlation function
-        """
-        T = self.temperature
-        J = self.spectral_density_func
-        J0 = self.spectral_density_limit_at_zero
+    # # there seems to be some sort of bug in this method...
+    # def corr_func_real(self, x):
+    #     """
+    #     Correlation function
+    #     """
 
-        def n(x):
-            return 1 / (exp(x / T) - 1)
+    #     T = self.temperature
+    #     J = self.spectral_density_func
+    #     J0 = self.spectral_density_limit_at_zero
 
-        def J_anti(x):
-            return J(x) if x >= 0 else -J(-x)
+    #     def n(x):
+    #         return 1 / (exp(x / T) - 1)
 
-        if x == 0:
-            return T * J0
-        else:
-            return (n(x) + 1) * J_anti(x)
+    #     def J_anti(x):
+    #         return J(x) if x >= 0 else -J(-x)
+
+    #     if x == 0:
+    #         return T * J0
+    #     else:
+    #         return (n(x) + 1) * J_anti(x)
 
     def spectral_density_func(self, x):
         """
@@ -78,6 +80,10 @@ class DebyeBath(Bath):
     @property
     def spectral_density_limit_at_zero(self):
         return 2 * self.reorg_energy / self.cutoff_freq
+
+    def corr_func_real(self, x):
+        # temporary method until Bath.corr_func_real gets fixed
+        return self.corr_func_complex(x).real
 
     def corr_func_complex(self, x, matsubara_cutoff=1000):
         """
