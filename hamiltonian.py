@@ -2,7 +2,6 @@ from abc import ABCMeta, abstractmethod
 import numpy as np
 import scipy.linalg
 
-from constants import GAUSSIAN_SD_FWHM
 from operator_tools import transition_operator, operator_extend, unit_vec
 from utils import imemoize, memoized_property, copy_with_new_cache
 

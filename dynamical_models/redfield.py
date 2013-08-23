@@ -1,10 +1,9 @@
 import numpy as np
 
 from ..operator_tools import basis_transform
-from .liouville_space import (den_to_vec, extract_subspace,
-                              super_commutator_matrix, tensor_to_super,
+from .liouville_space import (super_commutator_matrix, tensor_to_super,
                               liouville_subspace_indices,
-                              LiouvilleSpaceModel, LiouvilleSpaceOperator)
+                              LiouvilleSpaceModel)
 from ..utils import memoized_property
 
 
@@ -154,7 +153,7 @@ class RedfieldModel(LiouvilleSpaceModel):
                                            self.hamiltonian.n_vibrational_states)
         mesh = np.ix_(index, index)
         evolve_matrix = self.redfield_super_operator[mesh]
-        def eom(t, rho):
+        def eom(_, rho):
             return evolve_matrix.dot(rho)
         return eom
 
