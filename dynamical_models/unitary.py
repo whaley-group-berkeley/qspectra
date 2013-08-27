@@ -1,6 +1,7 @@
 import numpy as np
 
-from .liouville_space import liouville_subspace_indices, LiouvilleSpaceModel
+from .liouville_space import (liouville_subspace_indices, LiouvilleSpaceModel,
+                              super_commutator_matrix)
 from ..utils import memoized_property
 
 
@@ -9,7 +10,7 @@ class UnitaryModel(LiouvilleSpaceModel):
                  unit_convert=1):
         """
         Dynamical model for unitary evolution
-        
+
         Parameters
         ----------
         hamiltonian : hamiltonian.Hamiltonian
@@ -23,7 +24,7 @@ class UnitaryModel(LiouvilleSpaceModel):
             Hilbert subspace on which to calculate the Redfield tensor.
         unit_convert : number, optional
             Unit conversion from energy to time units (default 1).
-        
+
         References
         ----------
         Nitzan (2006)
@@ -31,11 +32,12 @@ class UnitaryModel(LiouvilleSpaceModel):
         super(UnitaryModel, self).__init__(hamiltonian, rw_freq,
                                            hilbert_subspace)
         self.unit_convert = unit_convert
-        
+
     @memoized_property
     def unitary_super_operator(self):
-        return self.unit_convert*self.hamiltonian.H(self.hilbert_subspace)
-        
+        H = self.unit_convert * self.hamiltonian.H(self.hilbert_subspace)
+        return -1j * super_commutator_matrix(H)
+
     def equation_of_motion(self, liouville_subspace):
         """
         Return the equation of motion for this dynamical model in the given
@@ -52,7 +54,7 @@ class UnitaryModel(LiouvilleSpaceModel):
         def eom(t, rho):
             return evolve_matrix.dot(rho)
         return eom
-        
+
     @property
     def time_step(self):
         """

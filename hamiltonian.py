@@ -210,7 +210,8 @@ class ElectronicHamiltonian(Hamiltonian):
         """
         Returns the number operator a_n^\dagger a_n for site n
         """
-        return operator_extend(np.diag(unit_vec(site, self.n_sites)), subspace)
+        return operator_extend(
+            np.diag(unit_vec(site, self.n_sites, dtype=float)), subspace)
 
     def system_bath_couplings(self, subspace='gef'):
         """
@@ -254,13 +255,12 @@ class VibronicHamiltonian(Hamiltonian):
                  elec_vib_couplings):
         self.electronic = electronic
         self.energy_offset = self.electronic.energy_offset
+        self.energy_spread_extra = self.electronic.energy_spread_extra
         self.bath = self.electronic.bath
         self.n_sites = self.electronic.n_sites
         self.n_vibrational_levels = n_vibrational_levels
         self.vib_energies = vib_energies
         self.elec_vib_couplings = elec_vib_couplings
-        # save other variables describing the vibrations...
-        # persumably replacing *args and **kwargs
 
     @memoized_property
     def n_vibrational_states(self):
@@ -278,11 +278,11 @@ class VibronicHamiltonian(Hamiltonian):
         """
         H_vib = np.diag(np.zeros(self.n_vibrational_states))
         for m, (num_levels, vib_energy) in \
-        enumerate(zip(self.n_vibrational_levels, self.vib_energies)):
+                enumerate(zip(self.n_vibrational_levels, self.vib_energies)):
             vib_operator = np.diag(np.arange(num_levels))
             H_vib += (vib_energy
-                      *extend_vib_operator(self.n_vibrational_levels, m,
-                                           vib_operator))
+                      * extend_vib_operator(self.n_vibrational_levels, m,
+                                            vib_operator))
         return H_vib
 
     def H_electronic_vibrational(self, subspace='gef'):
@@ -295,17 +295,17 @@ class VibronicHamiltonian(Hamiltonian):
         annihilation and creation operators for vibrational mode m
         """
         H_el_vib = np.diag(np.zeros(self.electronic.n_states(subspace)
-                                    *self.n_vibrational_states))
+                                    * self.n_vibrational_states))
         for i in np.arange(self.electronic.n_sites):
             el_operator = self.electronic.number_operator(i, subspace)
             for m, num_levels in enumerate(self.n_vibrational_levels):
                 vib_operator = (vib_annihilate(num_levels)
                                 + vib_create(num_levels))
-                H_el_vib += (self.elec_vib_couplings[i,m]
-                             *tensor(el_operator,
-                                     extend_vib_operator(
-                                         self.n_vibrational_levels,
-                                         m, vib_operator)))
+                H_el_vib += (self.elec_vib_couplings[i, m]
+                             * tensor(el_operator,
+                                      extend_vib_operator(
+                                          self.n_vibrational_levels,
+                                          m, vib_operator)))
         return H_el_vib
 
     @imemoize
@@ -343,7 +343,7 @@ class VibronicHamiltonian(Hamiltonian):
         electronic subspace, into a system operator in that subspace
         """
         return tensor(el_operator, np.eye(self.n_vibrational_states))
-    
+
     def vib_to_sys_operator(self, vib_operator, subspace='gef'):
         """
         Extends the vibrational operator vib_operator, which may be in a
