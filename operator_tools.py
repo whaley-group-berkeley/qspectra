@@ -1,6 +1,35 @@
 import numpy as np
 
 
+def tensor(*args):
+    return reduce(np.kron, args)
+
+
+def extend_vib_operator(n_vibrational_levels,m,vib_operator):
+    """
+    Extends the vibrational operator vib_operator, associated with
+    vibrational mode m, into an operator on the full vibrational subspace
+    """
+    return tensor(np.eye(np.prod(n_vibrational_levels[0:m])),
+                  vib_operator,
+                  np.eye(np.prod(n_vibrational_levels[
+                                     m+1:n_vibrational_levels.size])))
+
+
+def vib_annihilate(N):
+    """
+    Returns the annihilation operator for a vibrational mode with N levels
+    """
+    return np.diag(np.sqrt(np.arange(1,N)),k=1)
+
+
+def vib_create(N):
+    """
+    Returns the creation operator for a vibrational mode with N levels
+    """
+    return np.diag(np.sqrt(np.arange(1,N)),k=-1)
+
+
 def unit_vec(n, N, dtype=complex):
     """
     Returns the unit vector in direction n in N dimensions.
