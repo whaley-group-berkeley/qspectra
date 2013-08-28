@@ -38,8 +38,18 @@ class DynamicalModel(object):
         """
 
     @abstractmethod
+    def map_between_subspaces(self, state, from_subspace, to_subspace):
+        """
+        Given a state vector `state` defined on `from_subspace` in Liouville
+        space, return the state mapped onto `to_subspace`.
+
+        If any portion of `to_subspace` is not in `from_subspace`, that portion
+        of the state is assumed to be zero.
+        """
+
+    @abstractmethod
     def dipole_operator(self, liouv_subspace_map, polarization,
-                        include_transitions):
+                        include_transitions='-+'):
         """
         Return a dipole operator that follows the SystemOperator API for the
         given liouville_subspace_map, polarization and requested transitions
