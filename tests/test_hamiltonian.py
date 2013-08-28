@@ -11,6 +11,7 @@ class TestElectronicHamiltonian(unittest.TestCase):
         self.H_el = hamiltonian.ElectronicHamiltonian(self.M, 0, None, None, 1.0)
 
     def test_properties(self):
+        self.assertEqual(self.H_el.energy_offset, 0)
         self.assertEqual(self.H_el.energy_spread_extra, 1)
         self.assertEqual(self.H_el.n_sites, 2)
         self.assertEqual(self.H_el.n_states('gef'), 4)
@@ -30,10 +31,12 @@ class TestElectronicHamiltonian(unittest.TestCase):
         H_rw = self.H_el.in_rotating_frame(2)
         assert_allclose(H_rw.H('e'), [[-1, 0], [0, 1]])
         self.assertItemsEqual(H_rw.E('gef'), [0, 1, -1, 0])
+        self.assertEqual(H_rw.energy_offset, 2)
         self.assertEqual(H_rw.mean_excitation_freq, 2)
         self.assertEqual(H_rw.freq_step, 6.0)
 
         H_rw2 = self.H_el.in_rotating_frame(3)
+        self.assertEqual(H_rw2.energy_offset, 3)
         self.assertEqual(H_rw2.mean_excitation_freq, 2)
         assert_allclose(H_rw2.H('e'), [[-2, 0], [0, 0]])
 
