@@ -3,6 +3,7 @@ import unittest
 import numpy as np
 
 from qspectra.hamiltonian import ElectronicHamiltonian
+from qspectra.operator_tools import unit_vec
 import qspectra.dynamical_models.liouville_space as liouville_space
 
 
@@ -74,17 +75,52 @@ class TestSuperOperators(unittest.TestCase):
             liouville_space.super_commutator_matrix(self.operator).dot(self.rho_v))
 
 
+class ExampleLiouvilleSpaceModel(liouville_space.LiouvilleSpaceModel):
+    """
+    Example subclass of LiouvilleSpaceModel, since LiouvilleSpaceModel still
+    has some abstract methods
+    """
+    def equation_of_motion(self, liouville_subspace):
+        pass
+
+    @property
+    def time_step(self):
+        pass
+
+
+class TestLiouvilleSpaceModel(unittest.TestCase):
+    def setUp(self):
+        self.model = ExampleLiouvilleSpaceModel(ElectronicHamiltonian(np.eye(4)))
+
+    def test_ground_state(self):
+        assert_allclose(self.model.ground_state('gg'), [1])
+        assert_allclose(self.model.ground_state('gg,eg,ge,ee'), unit_vec(0, 25))
+        assert_allclose(self.model.ground_state('ee'), np.zeros(16))
+
+    def test_map_between_subspaces(self):
+        assert_allclose(
+            self.model.map_between_subspaces(np.ones(25), 'gg,eg,ge,ee', 'gg'),
+            [1])
+        assert_allclose(
+            self.model.map_between_subspaces(np.ones(25), 'gg,eg,ge,ee', 'gf'),
+            np.zeros(6))
+        assert_allclose(
+            self.model.map_between_subspaces(np.ones(25), 'gg,eg,ge,ee', 'gg,gf'),
+            np.concatenate([[1], np.zeros(6)]))
+
+
 class TestLiouvilleSpaceOperator(unittest.TestCase):
     def test(self):
         X = np.array([[1, 2], [3, 4]])
-        H = ElectronicHamiltonian([[0]])
-        L = liouville_space.LiouvilleSpaceOperator(X, 'ge', 'gg,eg,ge,ee->gg', H)
+        model = ExampleLiouvilleSpaceModel(ElectronicHamiltonian([[0]]),
+                                           hilbert_subspace='ge')
+        L = liouville_space.LiouvilleSpaceOperator(X, 'gg,eg,ge,ee->gg', model)
         assert_allclose(L.left_multiply([1, 10, 100, 1000]), [21])
         assert_allclose(L.right_multiply([1, 10, 100, 1000]), [301])
         assert_allclose(L.commutator([1, 10, 100, 1000]), [-280])
         assert_allclose(L.expectation_value([1, 10, 100, 1000]), [21])
-        L = liouville_space.LiouvilleSpaceOperator(X, 'ge', 'ee->gg,ee', H)
+        L = liouville_space.LiouvilleSpaceOperator(X, 'ee->gg,ee', model)
         assert_allclose(L.left_multiply([1]), [0, 4])
         assert_allclose(L.expectation_value([1]), 4)
-        L = liouville_space.LiouvilleSpaceOperator(X, 'ge', 'ee->gg,ge,eg,ee', H)
+        L = liouville_space.LiouvilleSpaceOperator(X, 'ee->gg,ge,eg,ee', model)
         assert_allclose(L.expectation_value([1]), 4)
