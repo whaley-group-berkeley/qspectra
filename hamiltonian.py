@@ -5,7 +5,7 @@ import scipy.linalg
 from operator_tools import (transition_operator, operator_extend, unit_vec,
                             tensor, extend_vib_operator, vib_create,
                             vib_annihilate)
-from utils import imemoize, memoized_property, copy_with_new_cache
+from utils import imemoize, memoized_property
 
 
 class HamiltonianError(Exception):
@@ -188,10 +188,8 @@ class ElectronicHamiltonian(Hamiltonian):
             rw_freq = self.mean_excitation_freq
         H_1exc = self.H_1exc - ((rw_freq - self.energy_offset)
                                 * np.identity(len(self.H_1exc)))
-        new_hamiltonian = copy_with_new_cache(self)
-        new_hamiltonian.H_1exc = H_1exc
-        new_hamiltonian.energy_offset = rw_freq
-        return new_hamiltonian
+        return type(self)(H_1exc, rw_freq, self.bath, self.dipoles,
+                          self.energy_spread_extra)
 
     def dipole_operator(self, subspace='gef', polarization='x',
                         transitions='-+'):
@@ -332,10 +330,9 @@ class VibronicHamiltonian(Hamiltonian):
 
         By default, sets the rotating frame to the central frequency.
         """
-        new_hamiltonian = copy_with_new_cache(self)
-        new_hamiltonian.electronic = (self.electronic.
-                                      in_rotating_frame(*args, **kwargs))
-        return new_hamiltonian
+        return type(self)(self.electronic.in_rotating_frame(*args, **kwargs),
+                          self.n_vibrational_levels, self.vib_energies,
+                          self.elec_vib_couplings)
 
     def el_to_sys_operator(self, el_operator):
         """
