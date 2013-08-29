@@ -157,55 +157,56 @@ class LiouvilleSpaceModel(DynamicalModel):
         self.rw_freq = self.hamiltonian.energy_offset
         self.hilbert_subspace = hilbert_subspace
 
+    def _liouville_subspace_indices(self, liouville_subspace, subspace=None):
+        if subspace is None:
+            subspace = self.hilbert_subspace
+        return liouville_subspace_indices(liouville_subspace, subspace,
+                                          self.hamiltonian.n_sites,
+                                          self.hamiltonian.n_vibrational_states)
+
     def ground_state(self, liouville_subspace):
-        """
-        Return the ground state in the given Liouville subspace
-        """
         rho0 = self.hamiltonian.ground_state(self.hilbert_subspace)
-        index = liouville_subspace_indices(liouville_subspace,
-                                           self.hilbert_subspace,
-                                           self.hamiltonian.n_sites,
-                                           self.hamiltonian.n_vibrational_states)
+        index = self._liouville_subspace_indices(liouville_subspace)
         return den_to_vec(rho0)[index]
 
-    def dipole_operator(self, liouv_subspace_map, polarization, transitions):
+    def map_between_subspaces(self, state, from_subspace, to_subspace):
+        from_indices, to_indices = map(self._liouville_subspace_indices,
+                                       [from_subspace, to_subspace])
+        N = self.hamiltonian.n_states(self.hilbert_subspace)
+        new_state = den_to_vec(np.zeros((N, N), dtype=complex))
+        new_state[from_indices] = state
+        return new_state[to_indices]
+
+    def dipole_operator(self, liouv_subspace_map, polarization,
+                        transitions='-+'):
         operator = self.hamiltonian.dipole_operator(self.hilbert_subspace,
                                                     polarization, transitions)
-        return LiouvilleSpaceOperator(operator, self.hilbert_subspace,
-                                      liouv_subspace_map, self.hamiltonian)
+        return LiouvilleSpaceOperator(operator, liouv_subspace_map, self)
 
 
 class LiouvilleSpaceOperator(SystemOperator):
-    def __init__(self, operator, operator_subspace, liouv_subspace_map,
-                 hamiltonian):
+    def __init__(self, operator, liouv_subspace_map, dynamical_model):
         """
         Parameters
         ----------
         operator : np.ndarray
-            Matrix representation of the operator in the 0 to 2 excitation
-            subspace.
-        operator_subspace : container
-            Container of any or all of 'g', 'e' and 'f' indicating the
-            subspace on which the operator is defined.
+            Matrix representation of the operator in the Hilbert subspace of
+            `dynamical_model`.
         liouv_subspace_map : string
             String in the form 'eg,fe->gg,ee' indicating the mapping between
             Liouville subspaces on which the operator should act. Optionally,
             only one Liouville subspace may be provided (e.g., a string of the
             form 'eg,fe'), in which case the super operator is assumed to map
             from and to the same subspace.
-        hamiltonian : hamiltonian.Hamiltonian
-            Hamiltonian on which this operator acts
+        dynamical_model : LiouvilleSpaceModel
+            LiouvilleSpaceModel on which this operator acts.
         """
         self.operator = operator
-        self.hamiltonian = hamiltonian
         liouv_subspaces = (liouv_subspace_map.split('->')
                            if '->' in liouv_subspace_map
                            else [liouv_subspace_map, liouv_subspace_map])
-        self.from_indices, self.to_indices = [
-            liouville_subspace_indices(liouv_subspace, operator_subspace,
-                                       self.hamiltonian.n_sites,
-                                       self.hamiltonian.n_vibrational_states)
-            for liouv_subspace in liouv_subspaces]
+        self.from_indices, self.to_indices = \
+            map(dynamical_model._liouville_subspace_indices, liouv_subspaces)
         self.super_op_mesh = np.ix_(self.to_indices, self.from_indices)
 
     @memoized_property

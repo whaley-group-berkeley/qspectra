@@ -72,6 +72,37 @@ def integrate(f, y0, t, method_name='zvode', f_params=None, save_func=None,
     return y
 
 
+class Zero(object):
+    """
+    Zero is an abstract representation of the number zero
+
+    After an inplace addition (+=) or subtraction (-=), a Zero object is
+    replaced by the other object (or its negative).
+
+    The purpose of Zero is to allow for initializing arrays of unknown
+    dimensions and type.
+
+    It's useful to initialize arrays of all zeros on which to perform inplace
+    operations, of course, because it allows for inplace array summations inside
+    a `for` loop, which can be much faster (and simplier) than calling Python's
+    built-in `sum` (which is not inplace).
+
+    Example
+    -------
+    >>> x = Zero()
+    >>> x += 10
+    >>> x
+    10
+    >>> type(x)
+    int
+    """
+    def __iadd__(self, other):
+        return other
+
+    def __isub__(self, other):
+        return -other
+
+
 def fourier_transform(t, x, axis=0, rw_freq=0, unit_convert=1, freq_bounds=None,
                       reverse_freq=False, positive_time_only=True):
     """

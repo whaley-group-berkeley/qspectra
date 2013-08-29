@@ -146,10 +146,10 @@ class ElectronicHamiltonian(Hamiltonian):
     """
     def __init__(self, H_1exc, energy_offset=0, bath=None, dipoles=None,
                  energy_spread_extra=100.0):
-        self.H_1exc = H_1exc
+        self.H_1exc = np.asanyarray(H_1exc)
         self.energy_offset = energy_offset
         self.bath = bath
-        self.dipoles = dipoles
+        self.dipoles = np.asanyarray(dipoles) if dipoles is not None else None
         self.energy_spread_extra = energy_spread_extra
         self.n_vibrational_states = 1
 
@@ -258,9 +258,9 @@ class VibronicHamiltonian(Hamiltonian):
         self.energy_spread_extra = self.electronic.energy_spread_extra
         self.bath = self.electronic.bath
         self.n_sites = self.electronic.n_sites
-        self.n_vibrational_levels = n_vibrational_levels
-        self.vib_energies = vib_energies
-        self.elec_vib_couplings = elec_vib_couplings
+        self.n_vibrational_levels = np.asanyarray(n_vibrational_levels)
+        self.vib_energies = np.asanyarray(vib_energies)
+        self.elec_vib_couplings = np.asanyarray(elec_vib_couplings)
 
     @memoized_property
     def n_vibrational_states(self):
