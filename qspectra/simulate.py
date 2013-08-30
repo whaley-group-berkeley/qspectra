@@ -1,10 +1,12 @@
 from functools import wraps
 import numpy as np
 
+from .hamiltonian import optional_ensemble_average
 from .polarization import optional_2nd_order_isotropic_average
 from .utils import integrate, fourier_transform, Zero
 
 
+@optional_ensemble_average
 def simulate_dynamics(dynamical_model, initial_state, duration,
                       liouville_subspace='gg,ge,eg,ee', **integrate_kwargs):
     """
@@ -37,6 +39,7 @@ def simulate_dynamics(dynamical_model, initial_state, duration,
     return (t, states)
 
 
+@optional_ensemble_average
 def simulate_with_fields(dynamical_model, pulses, geometry='-+',
                          polarization='xx', time_extra=0,
                          liouville_subspace='gg,ge,eg,ee', **integrate_kwargs):
@@ -96,6 +99,7 @@ def simulate_with_fields(dynamical_model, pulses, geometry='-+',
     return (t, states)
 
 
+@optional_ensemble_average
 def simulate_pump(dynamical_model, pump, polarization='x', time_extra=0,
                   liouville_subspace='gg,ge,eg,ee', isotropic_average=False,
                   **integrate_kwargs):
@@ -139,6 +143,7 @@ def simulate_pump(dynamical_model, pump, polarization='x', time_extra=0,
                 isotropic_average=isotropic_average, **integrate_kwargs)
 
 
+@optional_ensemble_average
 @optional_2nd_order_isotropic_average
 def linear_response(dynamical_model, liouv_space_path, time_max,
                     initial_state=None, polarization='xx', **integrate_kwargs):
@@ -223,6 +228,7 @@ def return_real_fourier_transform(func):
 
 
 @return_real_fourier_transform
+@optional_ensemble_average
 @optional_2nd_order_isotropic_average
 def absorption_spectra(dynamical_model, time_max, polarization='xx',
                        isotropic_average=False, **integrate_kwargs):
@@ -263,6 +269,7 @@ PUMP_PROBE_PATHWAYS = {'GSB': 'gg->eg->gg',
 
 
 @return_fourier_transform
+@optional_ensemble_average
 @optional_2nd_order_isotropic_average
 def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
                     initial_liouv_subspace='gg,ge,eg,ee',
@@ -309,13 +316,13 @@ def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
         if path in include_signal:
             liouv_space_path = PUMP_PROBE_PATHWAYS[path]
             path_start = liouv_space_path.split('->')[0]
-            initial_state = dynamical_model.map_between_subspaces(
+            init_state_portion = dynamical_model.map_between_subspaces(
                 initial_state, initial_liouv_subspace, path_start)
             (t, signal) = linear_response(dynamical_model, liouv_space_path,
-                                          time_max, initial_state, polarization,
-                                          **integrate_kwargs)
+                                          time_max, init_state_portion,
+                                          polarization, **integrate_kwargs)
             total_signal += signal
     if isinstance(total_signal, Zero):
         raise ValueError('include_signal must include at least one of '
                          "'GSB', 'ESE' or 'ESA'")
-    return (t, signal)
+    return (t, total_signal)

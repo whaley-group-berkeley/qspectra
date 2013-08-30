@@ -1,5 +1,7 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
 
+from ..utils import copy_with_new_cache
+
 
 class DynamicalModel(object):
     """
@@ -75,6 +77,16 @@ class DynamicalModel(object):
         The default time step at which to sample the equation of motion (in the
         rotating frame)
         """
+
+    def sample_ensemble(self, ensemble_size=1, random_seed=None):
+        """
+        Yields `ensemble_size` re-samplings of this dynamical model by sampling
+        the hamiltonian
+        """
+        for ham in self.hamiltonian.sample_ensemble(ensemble_size, random_seed):
+            new_dynamical_model = copy_with_new_cache(self)
+            new_dynamical_model.hamiltonian = ham
+            yield new_dynamical_model
 
 
 class SystemOperator(object):
