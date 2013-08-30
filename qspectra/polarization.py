@@ -105,6 +105,18 @@ def _get_call_args(func, *args, **kwargs):
 
 
 def optional_4th_order_isotropic_average(func):
+    """
+    Function decorator to add an optional `isotropic_average` to a function
+    with a `polarization` argument that takes four values
+
+    If `isotropic_average` is True, the function is instead called repeatedly in
+    order to calculate the exact isotropic average of this signal for the given
+    lab frame polarization.
+
+    The calculation is done by calculating all necessary 4th order tensor
+    variants of the function, and thus requires between 9 and 21 total function
+    evaluations.
+    """
     @wraps(func)
     def wrapper(*args, **kwargs):
         if kwargs.pop('isotropic_average', False):
@@ -125,6 +137,17 @@ def optional_4th_order_isotropic_average(func):
 
 
 def optional_2nd_order_isotropic_average(func):
+    """
+    Function decorator to add an optional `isotropic_average` to a function
+    with a `polarization` argument that takes a pair of values
+
+    If `isotropic_average` is True, the function is instead called repeatedly in
+    order to calculate the exact isotropic average of this signal for the given
+    lab frame polarization.
+
+    The calculation is done by calculating the 2nd order tensor variant of the
+    function, which requires 3 total function evaluations.
+    """
     @wraps(func)
     def wrapper(*args, **kwargs):
         if kwargs.pop('isotropic_average', False):
