@@ -14,6 +14,7 @@ from pulse import CustomPulse, GaussianPulse
 from simulate import (simulate_dynamics, simulate_with_fields, simulate_pump,
                       linear_response, absorption_spectra, impulsive_probe)
 from utils import fourier_transform
+import utils
 
 __all__ = ['DebyeBath', 'ArbitraryBath', 'UncoupledBath', 'CM_FS_LINEAR',
            'CM_FS', 'CM_K', 'GAUSSIAN_SD_FWHM', 'ElectronicHamiltonian',
@@ -23,4 +24,4 @@ __all__ = ['DebyeBath', 'ArbitraryBath', 'UncoupledBath', 'CM_FS_LINEAR',
            'CustomPulse', 'GaussianPulse', 'RedfieldModel', 'UnitaryModel',
            'simulate_dynamics', 'simulate_with_fields', 'simulate_pump',
            'linear_response', 'absorption_spectra', 'impulsive_probe',
-           'fourier_transform']
+           'fourier_transform', 'utils']

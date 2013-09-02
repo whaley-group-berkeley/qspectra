@@ -7,7 +7,7 @@ from constants import GAUSSIAN_SD_FWHM
 from operator_tools import (transition_operator, operator_extend, unit_vec,
                             tensor, extend_vib_operator, vib_create,
                             vib_annihilate)
-from polarization import polarization_vector
+from polarization import polarization_vector, random_rotation_matrix
 from utils import imemoize, memoized_property, Zero
 
 
@@ -195,7 +195,8 @@ class ElectronicHamiltonian(Hamiltonian):
         return type(self)(H_1exc, rw_freq, self.disorder_fwhm, self.bath,
                           self.dipoles, self.energy_spread_extra, ref_system)
 
-    def sample_ensemble(self, ensemble_size=1, random_seed=None):
+    def sample_ensemble(self, ensemble_size=1, randomize_orientations=False,
+                        random_seed=None):
         """
         Yields `ensemble_size` re-samplings of this Hamiltonian with diagonal
         disorder
@@ -204,11 +205,18 @@ class ElectronicHamiltonian(Hamiltonian):
             raise HamiltonianError('unable to sample ensemble because '
                                    'disorder_fwhm is undefined')
         np.random.seed(random_seed)
-        for _ in xrange(ensemble_size):
-            H_1exc = (self.H_1exc + self.disorder_fwhm * GAUSSIAN_SD_FWHM
-                      * np.diag(np.random.randn(self.n_sites)))
+        disorder = (self.disorder_fwhm * GAUSSIAN_SD_FWHM
+                    * np.random.randn(ensemble_size, self.n_sites))
+        for n, disorder_instance in enumerate(disorder):
+            H_1exc = self.H_1exc + np.diag(disorder_instance)
+            if randomize_orientations:
+                seed = None if random_seed is None else random_seed + n
+                dipoles = np.einsum('mn,in->im', random_rotation_matrix(seed),
+                                    self.dipoles)
+            else:
+                dipoles = self.dipoles
             yield type(self)(H_1exc, self.energy_offset, None, self.bath,
-                             self.dipoles, self.energy_spread_extra, self)
+                             dipoles, self.energy_spread_extra, self)
 
     def dipole_operator(self, subspace='gef', polarization='x',
                         transitions='-+'):
@@ -241,6 +249,22 @@ class ElectronicHamiltonian(Hamiltonian):
 
 
 def thermal_state(hamiltonian_matrix, temperature):
+    """
+    Given a Hamiltonian in matrix form and a temperature, return the thermal
+    density matrix
+
+    Parameters
+    ----------
+    hamiltonian_matrix : np.ndarray
+        Hamiltonian as an explicit matrix
+    temperature : float
+        Bath temperature, in the same units as the Hamiltonian
+
+    Returns
+    -------
+    rho : np.ndarray
+        Density matrix for thermal equilibrium
+    """
     rho = scipy.linalg.expm(-hamiltonian_matrix / temperature)
     return rho / np.trace(rho)
 
@@ -365,12 +389,12 @@ class VibronicHamiltonian(Hamiltonian):
                           self.n_vibrational_levels, self.vib_energies,
                           self.elec_vib_couplings, ref_system)
 
-    def sample_ensemble(self, ensemble_size=1, random_seed=None):
+    def sample_ensemble(self, *args, **kwargs):
         """
         Yields `ensemble_size` re-samplings of this Hamiltonian with diagonal
         electronic disorder
         """
-        for elec in self.electronic.sample_ensemble(ensemble_size, random_seed):
+        for elec in self.electronic.sample_ensemble(*args, **kwargs):
             yield type(self)(elec, self.n_vibrational_levels, self.vib_energies,
                              self.elec_vib_couplings, self)
 
@@ -408,9 +432,9 @@ class VibronicHamiltonian(Hamiltonian):
 
 def optional_ensemble_average(func):
     """
-    Function decorator to add optional `ensemble_size` and
-    `ensemble_random_seed` keyword arguments to a function that takes
-    a dynamical model as its first argument
+    Function decorator to add optional `ensemble_size`,
+    `ensemble_random_orientations` and `ensemble_random_seed` keyword
+    arguments to a function that takes a dynamical model as its first argument
 
     If `ensemble_size` is set, the function is resampled that number of times
     with dynamical models yielded by the original dynamical model's
@@ -421,9 +445,11 @@ def optional_ensemble_average(func):
         ensemble_size = kwargs.pop('ensemble_size', None)
         if ensemble_size is not None:
             random_seed = kwargs.pop('ensemble_random_seed', None)
+            random_orientations = kwargs.pop(
+                'ensemble_random_orientations', False)
             total_signal = Zero()
-            for dyn_model in dynamical_model.sample_ensemble(ensemble_size,
-                                                             random_seed):
+            for dyn_model in dynamical_model.sample_ensemble(
+                    ensemble_size, random_orientations, random_seed):
                 (t, signal) = func(dyn_model, *args, **kwargs)
                 total_signal += signal
             total_signal /= ensemble_size
