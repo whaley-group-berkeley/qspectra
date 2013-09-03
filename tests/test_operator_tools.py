@@ -5,6 +5,17 @@ import unittest
 from qspectra import operator_tools
 
 
+class TestVibrationOperators(unittest.TestCase):
+    def test(self):
+        assert_allclose(operator_tools.vib_annihilate(3),
+                        [[0, 1, 0], [0, 0, np.sqrt(2)], [0, 0, 0]])
+        assert_allclose(operator_tools.vib_create(3),
+                        [[0, 0, 0], [1, 0, 0], [0, np.sqrt(2), 0]])
+        assert_allclose(operator_tools.vib_create(3).dot(
+                            operator_tools.vib_annihilate(3)),
+                        [[0, 0, 0], [0, 1, 0], [0, 0, 2]])
+
+
 def test_unit_vec():
     assert_allclose(operator_tools.unit_vec(0, 3), [1, 0, 0])
 

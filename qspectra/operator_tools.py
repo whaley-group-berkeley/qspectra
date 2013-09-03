@@ -5,7 +5,7 @@ def tensor(*args):
     return reduce(np.kron, args)
 
 
-def extend_vib_operator(n_vibrational_levels,m,vib_operator):
+def extend_vib_operator(n_vibrational_levels, m, vib_operator):
     """
     Extends the vibrational operator vib_operator, associated with
     vibrational mode m, into an operator on the full vibrational subspace
@@ -20,14 +20,14 @@ def vib_annihilate(N):
     """
     Returns the annihilation operator for a vibrational mode with N levels
     """
-    return np.diag(np.sqrt(np.arange(1,N)),k=1)
+    return np.diag(np.sqrt(np.arange(1, N)), k=1)
 
 
 def vib_create(N):
     """
     Returns the creation operator for a vibrational mode with N levels
     """
-    return np.diag(np.sqrt(np.arange(1,N)),k=-1)
+    return np.diag(np.sqrt(np.arange(1, N)), k=-1)
 
 
 def unit_vec(n, N, dtype=complex):

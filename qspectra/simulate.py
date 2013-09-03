@@ -1,10 +1,12 @@
 from functools import wraps
 import numpy as np
 
+from .hamiltonian import optional_ensemble_average
 from .polarization import optional_2nd_order_isotropic_average
 from .utils import integrate, fourier_transform, Zero
 
 
+@optional_ensemble_average
 def simulate_dynamics(dynamical_model, initial_state, duration,
                       liouville_subspace='gg,ge,eg,ee', **integrate_kwargs):
     """
@@ -13,7 +15,7 @@ def simulate_dynamics(dynamical_model, initial_state, duration,
     Parameters
     ----------
     dynamical_model : DynamicalModel
-        Object obeying the DynamicModel API.
+        Object obeying the DynamicModel interface.
     initial_state : np.ndarray
         Vector representing the initial state in Liouville space
     duration : number
@@ -23,6 +25,15 @@ def simulate_dynamics(dynamical_model, initial_state, duration,
         the equation of motion. Defaults to 'gg,ge,eg,ee', indicating all ground
         and single excitation states, an approximation which is valid for weak
         fields.
+    ensemble_size : int, optional
+        If provided, perform an ensemble average of this signal over Hamiltonian
+        disorder, as determined by the `sample_ensemble` method of the provided
+        dynamical model.
+    ensemble_random_orientations : boolean, default False
+        Whether or not to randomize the orientation of each member of the
+        ensemble. Only relevant if `ensemble_size` is set.
+    ensemble_random_seed : int or array of int, optional
+        Random seed for ensemble sampling.
 
     Returns
     -------
@@ -37,6 +48,7 @@ def simulate_dynamics(dynamical_model, initial_state, duration,
     return (t, states)
 
 
+@optional_ensemble_average
 def simulate_with_fields(dynamical_model, pulses, geometry='-+',
                          polarization='xx', time_extra=0,
                          liouville_subspace='gg,ge,eg,ee', **integrate_kwargs):
@@ -47,9 +59,9 @@ def simulate_with_fields(dynamical_model, pulses, geometry='-+',
     Parameters
     ----------
     dynamical_model : DynamicalModel
-        Object obeying the DynamicModel API.
+        Object obeying the DynamicModel interface.
     pulses : list of Pulse objects
-        List of objects obeying the Pulse API.
+        List of objects obeying the Pulse interface.
     geometry : string
         String of '+' or '-' terms of the same length as pulses indicating
         whether to include a creation or annhilation operator with each pulse.
@@ -67,6 +79,15 @@ def simulate_with_fields(dynamical_model, pulses, geometry='-+',
         the equation of motion. Defaults to 'gg,ge,eg,ee', indicating all ground
         and single excitation states, an approximation which is valid for weak
         fields.
+    ensemble_size : int, optional
+        If provided, perform an ensemble average of this signal over Hamiltonian
+        disorder, as determined by the `sample_ensemble` method of the provided
+        dynamical model.
+    ensemble_random_orientations : boolean, default False
+        Whether or not to randomize the orientation of each member of the
+        ensemble. Only relevant if `ensemble_size` is set.
+    ensemble_random_seed : int or array of int, optional
+        Random seed for ensemble sampling.
 
     Returns
     -------
@@ -96,9 +117,10 @@ def simulate_with_fields(dynamical_model, pulses, geometry='-+',
     return (t, states)
 
 
+@optional_ensemble_average
 def simulate_pump(dynamical_model, pump, polarization='x', time_extra=0,
-                  liouville_subspace='gg,ge,eg,ee', isotropic_average=False,
-                  **integrate_kwargs):
+                  liouville_subspace='gg,ge,eg,ee',
+                  exact_isotropic_average=False, **integrate_kwargs):
     """
     Simulate time evolution under a pump field in the rotating wave
     approximation
@@ -106,9 +128,9 @@ def simulate_pump(dynamical_model, pump, polarization='x', time_extra=0,
     Parameters
     ----------
     dynamical_model : DynamicalModel
-        Object obeying the DynamicModel API.
+        Object obeying the DynamicModel interface.
     pump : Pulse
-        Object obeying the Pulse API.
+        Object obeying the Pulse interface.
     polarization : polarization, default 'x'
         Valid polarizations include:
         - 'x', 'y' or 'z', interepreted as the respective unit vectors
@@ -122,9 +144,21 @@ def simulate_pump(dynamical_model, pump, polarization='x', time_extra=0,
         the equation of motion. Defaults to 'gg,ge,eg,ee', indicating all ground
         and single excitation states, an approximation which is valid for weak
         fields.
-    isotropic_average : boolean, default False
-        If True, perform an average over all molecular orientations (accurate
-        up to 2nd order in the system-field coupling)
+    ensemble_size : int, optional
+        If provided, perform an ensemble average of this signal over Hamiltonian
+        disorder, as determined by the `sample_ensemble` method of the provided
+        dynamical model.
+    ensemble_random_orientations : boolean, default False
+        Whether or not to randomize the orientation of each member of the
+        ensemble. Only relevant if `ensemble_size` is set.
+    ensemble_random_seed : int or array of int, optional
+        Random seed for ensemble sampling.
+    exact_isotropic_average : boolean, default False
+        If True, perform an exact average over all molecular orientations
+        (accurate up to 2nd order in the system-field coupling), at cost of 3x
+        the computation time.
+    **integrate_kwargs : optional
+        Additional keyword arguments are passed to `utils.integrate`.
 
     Returns
     -------
@@ -136,9 +170,11 @@ def simulate_pump(dynamical_model, pump, polarization='x', time_extra=0,
     return optional_2nd_order_isotropic_average(simulate_with_fields)(
                 dynamical_model, [pump, pump], '-+',
                 [polarization, polarization], time_extra, liouville_subspace,
-                isotropic_average=isotropic_average, **integrate_kwargs)
+                exact_isotropic_average=exact_isotropic_average,
+                **integrate_kwargs)
 
 
+@optional_ensemble_average
 @optional_2nd_order_isotropic_average
 def linear_response(dynamical_model, liouv_space_path, time_max,
                     initial_state=None, polarization='xx', **integrate_kwargs):
@@ -148,7 +184,7 @@ def linear_response(dynamical_model, liouv_space_path, time_max,
     Parameters
     ----------
     dynamical_model : DynamicalModel
-        Object obeying the DynamicModel API.
+        Object obeying the DynamicModel interface.
     liouv_space_path : string of the form 'ab->cd->ef'
         String indicating the Liouville space pathways to include. Should
         indicate three valid Liouville subspaces separated by '->'.
@@ -164,8 +200,20 @@ def linear_response(dynamical_model, liouv_space_path, time_max,
         - 'x', 'y' or 'z', interepreted as the respective unit vectors
         - Angles of rotation from [1, 0, 0] in the x-y plane
         - 3D lists, tuples or arrays of numbers
-    isotropic_average : boolean, default False
-        If True, perform an average over all molecular orientations
+    ensemble_size : int, optional
+        If provided, perform an ensemble average of this signal over Hamiltonian
+        disorder, as determined by the `sample_ensemble` method of the provided
+        dynamical model.
+    ensemble_random_orientations : boolean, default False
+        Whether or not to randomize the orientation of each member of the
+        ensemble. Only relevant if `ensemble_size` is set.
+    ensemble_random_seed : int or array of int, optional
+        Random seed for ensemble sampling.
+    exact_isotropic_average : boolean, default False
+        If True, perform an exact average over all molecular orientations, at
+        cost of 3x the computation time.
+    **integrate_kwargs : optional
+        Additional keyword arguments are passed to `utils.integrate`.
 
     Returns
     -------
@@ -223,24 +271,37 @@ def return_real_fourier_transform(func):
 
 
 @return_real_fourier_transform
+@optional_ensemble_average
 @optional_2nd_order_isotropic_average
 def absorption_spectra(dynamical_model, time_max, polarization='xx',
-                       isotropic_average=False, **integrate_kwargs):
+                       exact_isotropic_average=False, **integrate_kwargs):
     """
     Returns the absorption spectra of a dynamical model
 
     Parameters
     ----------
     dynamical_model : DynamicalModel
-        Object obeying the DynamicModel API.
+        Object obeying the DynamicModel interface.
     time_max : number
         Maximum time for which to simulate dynamics between the probe and signal
         interactions.
     polarization : iterable, default 'xx'
         Two item iterable giving the polarization of the last two system-field
         interactions as strings or 3D arrays
-    isotropic_average : boolean, default False
-        If True, perform an average over all molecular orientations
+    ensemble_size : int, optional
+        If provided, perform an ensemble average of this signal over Hamiltonian
+        disorder, as determined by the `sample_ensemble` method of the provided
+        dynamical model.
+    ensemble_random_orientations : boolean, default False
+        Whether or not to randomize the orientation of each member of the
+        ensemble. Only relevant if `ensemble_size` is set.
+    ensemble_random_seed : int or array of int, optional
+        Random seed for ensemble sampling.
+    exact_isotropic_average : boolean, default False
+        If True, perform an exact average over all molecular orientations, at
+        cost of 3x the computation time.
+    **integrate_kwargs : optional
+        Additional keyword arguments are passed to `utils.integrate`.
 
     Returns
     -------
@@ -252,7 +313,7 @@ def absorption_spectra(dynamical_model, time_max, polarization='xx',
     """
     (t, x) = linear_response(dynamical_model, 'gg->eg->gg', time_max,
                              polarization=polarization,
-                             isotropic_average=isotropic_average,
+                             exact_isotropic_average=exact_isotropic_average,
                              **integrate_kwargs)
     return (t, -x)
 
@@ -263,6 +324,7 @@ PUMP_PROBE_PATHWAYS = {'GSB': 'gg->eg->gg',
 
 
 @return_fourier_transform
+@optional_ensemble_average
 @optional_2nd_order_isotropic_average
 def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
                     initial_liouv_subspace='gg,ge,eg,ee',
@@ -274,7 +336,7 @@ def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
     Parameters
     ----------
     dynamical_model : DynamicalModel
-        Object obeying the DynamicModel API.
+        Object obeying the DynamicModel interface.
     state : np.ndarray
         State vector for the system at the time of the probe pulse.
     time_max : number
@@ -292,8 +354,20 @@ def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
         Indicates whether to include the ground-state-bleach (GSB), excited-
         state-emission (ESE) and excited-state-absorption (ESA) contributions
         to the signal.
-    isotropic_average : boolean, default False
-        If True, perform an average over all molecular orientations
+    ensemble_size : int, optional
+        If provided, perform an ensemble average of this signal over Hamiltonian
+        disorder, as determined by the `sample_ensemble` method of the provided
+        dynamical model.
+    ensemble_random_orientations : boolean, default False
+        Whether or not to randomize the orientation of each member of the
+        ensemble. Only relevant if `ensemble_size` is set.
+    ensemble_random_seed : int or array of int, optional
+        Random seed for ensemble sampling.
+    exact_isotropic_average : boolean, default False
+        If True, perform an exact average over all molecular orientations, at
+        cost of 3x the computation time.
+    **integrate_kwargs : optional
+        Additional keyword arguments are passed to `utils.integrate`.
 
     Returns
     -------
@@ -309,13 +383,13 @@ def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
         if path in include_signal:
             liouv_space_path = PUMP_PROBE_PATHWAYS[path]
             path_start = liouv_space_path.split('->')[0]
-            initial_state = dynamical_model.map_between_subspaces(
+            init_state_portion = dynamical_model.map_between_subspaces(
                 initial_state, initial_liouv_subspace, path_start)
             (t, signal) = linear_response(dynamical_model, liouv_space_path,
-                                          time_max, initial_state, polarization,
-                                          **integrate_kwargs)
+                                          time_max, init_state_portion,
+                                          polarization, **integrate_kwargs)
             total_signal += signal
     if isinstance(total_signal, Zero):
         raise ValueError('include_signal must include at least one of '
                          "'GSB', 'ESE' or 'ESA'")
-    return (t, signal)
+    return (t, total_signal)

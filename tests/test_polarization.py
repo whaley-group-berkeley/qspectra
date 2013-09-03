@@ -62,6 +62,11 @@ class TestPolarization(unittest.TestCase):
                                'yyxx', 'yyyy', 'yyzz',
                                'zzxx', 'zzyy', 'zzzz'])
 
+    def test_random_rotation_matrix(self):
+        M = polarization.random_rotation_matrix()
+        self.assertTrue(isinstance(M, np.ndarray))
+        self.assertEqual(M.shape, (3, 3))
+
 
 class TestGetCallArgs(unittest.TestCase):
     def test(self):
@@ -87,9 +92,9 @@ class TestIsotropicAverage(unittest.TestCase):
         f = polarization.optional_2nd_order_isotropic_average(
             lambda polarization: (0, binary[polarization]))
         assert_allclose(f('xx'), (0, 1))
-        assert_allclose(f('xx', isotropic_average=False), (0, 1))
-        assert_allclose(f('xx', isotropic_average=True), (0, 7 / 3.0))
-        assert_allclose(f('xy', isotropic_average=True), (0, 0))
+        assert_allclose(f('xx', exact_isotropic_average=False), (0, 1))
+        assert_allclose(f('xx', exact_isotropic_average=True), (0, 7 / 3.0))
+        assert_allclose(f('xy', exact_isotropic_average=True), (0, 0))
 
     def test_optional_4th_order_isotropic_average(self):
         binary = {'xx': 1, 'yy': 2, 'zz': 4}
@@ -98,5 +103,5 @@ class TestIsotropicAverage(unittest.TestCase):
                                       + 10 * binary[polarization[2:]]))
         assert_allclose(f('xxxx'), (0, 11))
         ma = polarization.MAGIC_ANGLE
-        assert_allclose(f([0, 0, ma, ma], isotropic_average=True),
+        assert_allclose(f([0, 0, ma, ma], exact_isotropic_average=True),
                         (0, (11 + 12 + 14 + 21 + 22 + 24 + 41 + 42 + 44) / 9.0))

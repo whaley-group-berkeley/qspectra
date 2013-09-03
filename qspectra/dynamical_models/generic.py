@@ -1,5 +1,7 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
 
+from ..utils import copy_with_new_cache
+
 
 class DynamicalModel(object):
     """
@@ -19,6 +21,14 @@ class DynamicalModel(object):
         The frequency of the rotating frame in which this model applies.
         Typically, `rw_freq` would be defined by the hamiltonian which provides
         the parameters to initialize a new DynamicalModel object.
+
+    Warning
+    -------
+    In the current implementation of DynamicalModel, it is assumed that you can
+    create a modified copy of a dynamical model by merely copying all instance
+    variables and replcaing the hamiltonian with a modified hamiltonian. If this
+    is not the case for your subclass, you need to override the
+    `sample_ensemble` method.
     """
     __metaclass__ = ABCMeta
 
@@ -75,6 +85,16 @@ class DynamicalModel(object):
         The default time step at which to sample the equation of motion (in the
         rotating frame)
         """
+
+    def sample_ensemble(self, *args, **kwargs):
+        """
+        Yields `ensemble_size` re-samplings of this dynamical model by sampling
+        the hamiltonian
+        """
+        for ham in self.hamiltonian.sample_ensemble(*args, **kwargs):
+            new_dynamical_model = copy_with_new_cache(self)
+            new_dynamical_model.hamiltonian = ham
+            yield new_dynamical_model
 
 
 class SystemOperator(object):
