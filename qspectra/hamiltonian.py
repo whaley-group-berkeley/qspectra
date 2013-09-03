@@ -5,6 +5,7 @@ import scipy.linalg
 from operator_tools import (transition_operator, operator_extend, unit_vec,
                             tensor, extend_vib_operator, vib_create,
                             vib_annihilate)
+from polarization import polarization_vector
 from utils import imemoize, memoized_property
 
 
@@ -104,22 +105,6 @@ class Hamiltonian(object):
     @property
     def time_step(self):
         return 1.0 / self.freq_step
-
-
-COORD_MAP = {'x': np.array([1, 0, 0]),
-             'y': np.array([0, 1, 0]),
-             'z': np.array([0, 0, 1])}
-
-
-def polarization_vector(p):
-    """
-    Cast a polarization vector given by a list of three points or 'x', 'y' or
-    'z' into a 3D vector
-    """
-    try:
-        return COORD_MAP[p]
-    except (TypeError, KeyError):
-        return np.asanyarray(p)
 
 
 class ElectronicHamiltonian(Hamiltonian):

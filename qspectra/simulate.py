@@ -1,7 +1,8 @@
 from functools import wraps
 import numpy as np
 
-from utils import integrate, fourier_transform, Zero
+from .polarization import optional_2nd_order_isotropic_average
+from .utils import integrate, fourier_transform, Zero
 
 
 def simulate_dynamics(dynamical_model, initial_state, duration,
@@ -37,7 +38,7 @@ def simulate_dynamics(dynamical_model, initial_state, duration,
 
 
 def simulate_with_fields(dynamical_model, pulses, geometry='-+',
-                         polarizations='xx', time_extra=0,
+                         polarization='xx', time_extra=0,
                          liouville_subspace='gg,ge,eg,ee', **integrate_kwargs):
     """
     Simulate time evolution under a series of pulses in the rotating wave
@@ -47,14 +48,17 @@ def simulate_with_fields(dynamical_model, pulses, geometry='-+',
     ----------
     dynamical_model : DynamicalModel
         Object obeying the DynamicModel API.
-    pulses : iterable of Pulse objects
-        Iterable of objects obeying the Pulse API.
-    geometry : iterable of string
-        Iterable of '+' or '-' terms of the same length as pulses indicating
+    pulses : list of Pulse objects
+        List of objects obeying the Pulse API.
+    geometry : string
+        String of '+' or '-' terms of the same length as pulses indicating
         whether to include a creation or annhilation operator with each pulse.
-    polarizations : iterable of string or array
-        Iterable of polarizations, in the form ('x', 'y' or 'z') or a 3D vector
-        giving the polarization of each pulse.
+    polarization : list of polarizations
+        List of polarizations of the same length as pulses. Valid polarizations
+        include:
+        - 'x', 'y' or 'z', interepreted as the respective unit vectors
+        - Angles of rotation from [1, 0, 0] in the x-y plane
+        - 3D lists, tuples or arrays of numbers
     time_extra : number, optional
         Extra time after the end of the pump-pulse for which to integrate
         dynamics (default 0).
@@ -73,7 +77,7 @@ def simulate_with_fields(dynamical_model, pulses, geometry='-+',
     """
     eom = dynamical_model.equation_of_motion(liouville_subspace)
     V = [dynamical_model.dipole_operator(liouville_subspace, polar, trans)
-         for polar, trans in zip(polarizations, geometry)]
+         for polar, trans in zip(polarization, geometry)]
     field_info = zip(pulses, geometry, V)
 
     def f(t, state):
@@ -92,8 +96,9 @@ def simulate_with_fields(dynamical_model, pulses, geometry='-+',
     return (t, states)
 
 
-def simulate_pump(dynamical_model, pump, polarization, time_extra=0,
-                  liouville_subspace='gg,ge,eg,ee', **integrate_kwargs):
+def simulate_pump(dynamical_model, pump, polarization='x', time_extra=0,
+                  liouville_subspace='gg,ge,eg,ee', isotropic_average=False,
+                  **integrate_kwargs):
     """
     Simulate time evolution under a pump field in the rotating wave
     approximation
@@ -104,9 +109,11 @@ def simulate_pump(dynamical_model, pump, polarization, time_extra=0,
         Object obeying the DynamicModel API.
     pump : Pulse
         Object obeying the Pulse API.
-    polarization : string or array
-        String ('x', 'y' or 'z') or three item list giving the polarization of
-        pump-field.
+    polarization : polarization, default 'x'
+        Valid polarizations include:
+        - 'x', 'y' or 'z', interepreted as the respective unit vectors
+        - Angles of rotation from [1, 0, 0] in the x-y plane
+        - 3D lists, tuples or arrays of numbers
     time_extra : number, optional
         Extra time after the end of the pump-pulse for which to integrate
         dynamics (default 0).
@@ -115,6 +122,9 @@ def simulate_pump(dynamical_model, pump, polarization, time_extra=0,
         the equation of motion. Defaults to 'gg,ge,eg,ee', indicating all ground
         and single excitation states, an approximation which is valid for weak
         fields.
+    isotropic_average : boolean, default False
+        If True, perform an average over all molecular orientations (accurate
+        up to 2nd order in the system-field coupling)
 
     Returns
     -------
@@ -123,11 +133,13 @@ def simulate_pump(dynamical_model, pump, polarization, time_extra=0,
     states : np.ndarray
         Two-dimensional array of simulated state vectors at all times t.
     """
-    return simulate_with_fields(dynamical_model, [pump, pump], '-+',
-                                [polarization, polarization], time_extra,
-                                liouville_subspace, **integrate_kwargs)
+    return optional_2nd_order_isotropic_average(simulate_with_fields)(
+                dynamical_model, [pump, pump], '-+',
+                [polarization, polarization], time_extra, liouville_subspace,
+                isotropic_average=isotropic_average, **integrate_kwargs)
 
 
+@optional_2nd_order_isotropic_average
 def linear_response(dynamical_model, liouv_space_path, time_max,
                     initial_state=None, polarization='xx', **integrate_kwargs):
     """
@@ -147,9 +159,13 @@ def linear_response(dynamical_model, liouv_space_path, time_max,
         Initial condition for the state vector, which should be defined on the
         first Liouville subspace in `liouv_space_path`. Defaults to the
         ground state of the dynamical model.
-    polarization : iterable, default 'xx'
-        Two item iterable giving the polarization of the last two system-field
-        interactions as strings or 3D arrays
+    polarization : pair of polarizations, default 'xx'
+        Valid polarizations include:
+        - 'x', 'y' or 'z', interepreted as the respective unit vectors
+        - Angles of rotation from [1, 0, 0] in the x-y plane
+        - 3D lists, tuples or arrays of numbers
+    isotropic_average : boolean, default False
+        If True, perform an average over all molecular orientations
 
     Returns
     -------
@@ -207,8 +223,9 @@ def return_real_fourier_transform(func):
 
 
 @return_real_fourier_transform
+@optional_2nd_order_isotropic_average
 def absorption_spectra(dynamical_model, time_max, polarization='xx',
-                       **integrate_kwargs):
+                       isotropic_average=False, **integrate_kwargs):
     """
     Returns the absorption spectra of a dynamical model
 
@@ -222,6 +239,8 @@ def absorption_spectra(dynamical_model, time_max, polarization='xx',
     polarization : iterable, default 'xx'
         Two item iterable giving the polarization of the last two system-field
         interactions as strings or 3D arrays
+    isotropic_average : boolean, default False
+        If True, perform an average over all molecular orientations
 
     Returns
     -------
@@ -232,7 +251,9 @@ def absorption_spectra(dynamical_model, time_max, polarization='xx',
         the frequency domain.
     """
     (t, x) = linear_response(dynamical_model, 'gg->eg->gg', time_max,
-                             polarization=polarization, **integrate_kwargs)
+                             polarization=polarization,
+                             isotropic_average=isotropic_average,
+                             **integrate_kwargs)
     return (t, -x)
 
 
@@ -242,6 +263,7 @@ PUMP_PROBE_PATHWAYS = {'GSB': 'gg->eg->gg',
 
 
 @return_fourier_transform
+@optional_2nd_order_isotropic_average
 def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
                     initial_liouv_subspace='gg,ge,eg,ee',
                     include_signal='GSB,ESE,ESA', **integrate_kwargs):
@@ -258,9 +280,11 @@ def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
     time_max : number
         Maximum time for which to simulate dynamics between the probe and signal
         interactions.
-    polarization : iterable, default 'xx'
-        Two item iterable giving the polarization of the last two system-field
-        interactions as strings or 3D arrays
+    polarization : pair of polarizations, default 'xx'
+        Valid polarizations include:
+        - 'x', 'y' or 'z', interepreted as the respective unit vectors
+        - Angles of rotation from [1, 0, 0] in the x-y plane
+        - 3D lists, tuples or arrays of numbers
     initial_liouv_subspace : string, optional
         String indicating the subspace of Liouville space in which the provided
         state is defined. Defaults to 'gg,ge,eg,ee'.
@@ -268,6 +292,8 @@ def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
         Indicates whether to include the ground-state-bleach (GSB), excited-
         state-emission (ESE) and excited-state-absorption (ESA) contributions
         to the signal.
+    isotropic_average : boolean, default False
+        If True, perform an average over all molecular orientations
 
     Returns
     -------
