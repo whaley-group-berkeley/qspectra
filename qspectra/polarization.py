@@ -1,10 +1,11 @@
 from functools import wraps
 from itertools import product
 from numbers import Number
+from numpy import cos, sin, pi, sqrt
 import inspect
 import numpy as np
 
-from utils import Zero
+from .utils import Zero
 
 
 COORD_MAP = {'x': np.array([1, 0, 0]),
@@ -79,6 +80,25 @@ def list_polarizations(invariant):
             if all(polarization[a] == polarization[b] for a, b in invariant)]
 
 
+def random_rotation_matrix(random_seed=None):
+    """
+    Returns a uniformly distributed random rotation matrix
+
+    Reference
+    ---------
+    Arvo, J. Fast Random Rotation Matrices in Graphics Gems III 117-120
+    (Academic Press Professional, Inc., 1992).
+    """
+    np.random.seed(random_seed)
+    x1, x2, x3 = np.random.rand(3)
+    theta = 2 * pi * x1
+    phi = 2 * pi * x2
+    R = [[cos(theta), sin(theta), 0], [-sin(theta), cos(theta), 0], [0, 0, 1]]
+    v = [cos(phi) * sqrt(x3), sin(phi) * sqrt(x3), sqrt(1 - x3)]
+    H = np.identity(3) - 2 * np.outer(v, v)
+    return -H.dot(R)
+
+
 def _get_call_args(func, *args, **kwargs):
     """
     Like inspect.getcallargs, except it returns keyword arguments inserted
@@ -106,12 +126,12 @@ def _get_call_args(func, *args, **kwargs):
 
 def optional_4th_order_isotropic_average(func):
     """
-    Function decorator to add an optional `isotropic_average` to a function
-    with a `polarization` argument that takes four values
+    Function decorator to add an optional `exact_isotropic_average` argument to
+    a function with a `polarization` argument that takes four values
 
-    If `isotropic_average` is True, the function is instead called repeatedly in
-    order to calculate the exact isotropic average of this signal for the given
-    lab frame polarization.
+    If `exact_isotropic_average` is True, the function is instead called
+    repeatedly in order to calculate the exact isotropic average of this signal
+    for the given lab frame polarization.
 
     The calculation is done by calculating all necessary 4th order tensor
     variants of the function, and thus requires between 9 and 21 total function
@@ -119,7 +139,7 @@ def optional_4th_order_isotropic_average(func):
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
-        if kwargs.pop('isotropic_average', False):
+        if kwargs.pop('exact_isotropic_average', False):
             kwargs = _get_call_args(func, *args, **kwargs)
             weights = invariant_weights_4th_order(kwargs.pop('polarization'))
             signals = {}
@@ -138,19 +158,19 @@ def optional_4th_order_isotropic_average(func):
 
 def optional_2nd_order_isotropic_average(func):
     """
-    Function decorator to add an optional `isotropic_average` to a function
-    with a `polarization` argument that takes a pair of values
+    Function decorator to add an optional `exact_isotropic_average` argument to
+    a function with a `polarization` argument that takes a pair of values
 
-    If `isotropic_average` is True, the function is instead called repeatedly in
-    order to calculate the exact isotropic average of this signal for the given
-    lab frame polarization.
+    If `exact_isotropic_average` is True, the function is instead called
+    repeatedly in order to calculate the exact isotropic average of this signal
+    for the given lab frame polarization.
 
     The calculation is done by calculating the 2nd order tensor variant of the
     function, which requires 3 total function evaluations.
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
-        if kwargs.pop('isotropic_average', False):
+        if kwargs.pop('exact_isotropic_average', False):
             kwargs = _get_call_args(func, *args, **kwargs)
             weight = np.dot(*map(polarization_vector,
                                  kwargs.pop('polarization')))
