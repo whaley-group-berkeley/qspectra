@@ -12,8 +12,9 @@ from polarization import (polarization_vector, invariant_weights_4th_order,
                           MAGIC_ANGLE)
 from pulse import CustomPulse, GaussianPulse
 from simulate import (simulate_dynamics, simulate_with_fields, simulate_pump,
-                      linear_response, absorption_spectra, impulsive_probe)
-from utils import fourier_transform
+                      linear_response, absorption_spectra, impulsive_probe,
+                      simulate_two_pulses)
+from utils import fourier_transform, Zero
 import utils
 
 __all__ = ['DebyeBath', 'ArbitraryBath', 'UncoupledBath', 'CM_FS_LINEAR',
@@ -24,4 +25,4 @@ __all__ = ['DebyeBath', 'ArbitraryBath', 'UncoupledBath', 'CM_FS_LINEAR',
            'CustomPulse', 'GaussianPulse', 'RedfieldModel', 'UnitaryModel',
            'simulate_dynamics', 'simulate_with_fields', 'simulate_pump',
            'linear_response', 'absorption_spectra', 'impulsive_probe',
-           'fourier_transform', 'utils']
+           'simulate_two_pulses', 'fourier_transform', 'utils', 'Zero']

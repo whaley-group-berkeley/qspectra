@@ -118,6 +118,65 @@ def simulate_with_fields(dynamical_model, pulses, geometry='-+',
 
 
 @optional_ensemble_average
+@optional_2nd_order_isotropic_average
+def simulate_two_pulses(dynamical_model, pulses, geometry='-+',
+                        polarization='xx', time_extra=0,
+                        liouville_subspace='gg,ge,eg,ee', **integrate_kwargs):
+    """
+    Simulate time evolution under a pump field in the rotating wave
+    approximation
+
+    Parameters
+    ----------
+    dynamical_model : DynamicalModel
+        Object obeying the DynamicModel interface.
+    pulses : list of two Pulse objects
+        List of two objects obeying the Pulse interface.
+    geometry : string
+        String of two '+' or '-' terms indicating whether to include a creation
+        or annhilation operator with each pulse.
+    polarization : list of polarizations
+        List of two polarizations. Valid polarizations include:
+        - 'x', 'y' or 'z', interepreted as the respective unit vectors
+        - Angles of rotation from [1, 0, 0] in the x-y plane
+        - 3D lists, tuples or arrays of numbers
+    time_extra : number, optional
+        Extra time after the end of the pump-pulse for which to integrate
+        dynamics (default 0).
+    liouville_subspace : string, optional
+        String indicating the subspace of Liouville space in which to integrate
+        the equation of motion. Defaults to 'gg,ge,eg,ee', indicating all ground
+        and single excitation states, an approximation which is valid for weak
+        fields.
+    ensemble_size : int, optional
+        If provided, perform an ensemble average of this signal over Hamiltonian
+        disorder, as determined by the `sample_ensemble` method of the provided
+        dynamical model.
+    ensemble_random_orientations : boolean, default False
+        Whether or not to randomize the orientation of each member of the
+        ensemble. Only relevant if `ensemble_size` is set.
+    ensemble_random_seed : int or array of int, optional
+        Random seed for ensemble sampling.
+    exact_isotropic_average : boolean, default False
+        If True, perform an exact average over all molecular orientations
+        (accurate up to 2nd order in the system-field coupling), at cost of 3x
+        the computation time.
+    **integrate_kwargs : optional
+        Additional keyword arguments are passed to `utils.integrate`.
+
+    Returns
+    -------
+    t : np.ndarray
+        Times at which the state was simulated.
+    states : np.ndarray
+        Two-dimensional array of simulated state vectors at all times t.
+    """
+    return simulate_with_fields(dynamical_model, pulses, geometry, polarization,
+                                time_extra, liouville_subspace,
+                                **integrate_kwargs)
+
+
+@optional_ensemble_average
 def simulate_pump(dynamical_model, pump, polarization='x', time_extra=0,
                   liouville_subspace='gg,ge,eg,ee',
                   exact_isotropic_average=False, **integrate_kwargs):
