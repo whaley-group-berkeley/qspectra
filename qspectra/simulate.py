@@ -273,8 +273,9 @@ def return_real_fourier_transform(func):
 @return_real_fourier_transform
 @optional_ensemble_average
 @optional_2nd_order_isotropic_average
-def absorption_spectra(dynamical_model, time_max, polarization='xx',
-                       exact_isotropic_average=False, **integrate_kwargs):
+def absorption_spectra(dynamical_model, time_max, correlation_decay_time=None,
+                       polarization='xx', exact_isotropic_average=False,
+                       **integrate_kwargs):
     """
     Returns the absorption spectra of a dynamical model
 
@@ -285,6 +286,10 @@ def absorption_spectra(dynamical_model, time_max, polarization='xx',
     time_max : number
         Maximum time for which to simulate dynamics between the probe and signal
         interactions.
+    correlation_decay_time : number, optional
+        If provided, multiply the dipole correlation function (i.e., the linear
+        response function) by a exponential decay of the form `exp(-t/tau)`,
+        where `tau` is this decay time.
     polarization : iterable, default 'xx'
         Two item iterable giving the polarization of the last two system-field
         interactions as strings or 3D arrays
@@ -315,6 +320,8 @@ def absorption_spectra(dynamical_model, time_max, polarization='xx',
                              polarization=polarization,
                              exact_isotropic_average=exact_isotropic_average,
                              **integrate_kwargs)
+    if correlation_decay_time is not None:
+        x *= np.exp(-t / correlation_decay_time)
     return (t, -x)
 
 
