@@ -1,5 +1,6 @@
 from copy import copy
 import functools
+import numpy as np
 
 
 class ZeroArray(object):
@@ -31,6 +32,19 @@ class ZeroArray(object):
 
     def __isub__(self, other):
         return -other
+
+
+def ndarray_list(iterable_of_ndarrays, length):
+    """
+    Given an iterable of ndarrays of known length, all with the same shape and
+    dtype, return a new ndarray containing all the provided arrays
+    """
+    for n, cur_array in enumerate(iterable_of_ndarrays):
+        if n == 0:
+            combined_array = np.empty([length] + list(cur_array.shape),
+                                      cur_array.dtype)
+        combined_array[n] = cur_array
+    return combined_array
 
 
 class imemoize(object):

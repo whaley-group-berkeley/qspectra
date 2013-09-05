@@ -113,7 +113,7 @@ def fourier_transform(t, x, axis=0, rw_freq=0, unit_convert=1, freq_bounds=None,
     rev = 1 if reverse_freq else -1
 
     fft_freqs = np.fft.fftfreq(x_all.shape[axis], dt * unit_convert / (2 * pi))
-    freqs = rev * np.fft.fftshift(fft_freqs, axes=axis) + rw_freq
+    freqs = rev * np.fft.fftshift(fft_freqs) + rw_freq
 
     if freq_bounds is not None:
         i0 = np.argmin(np.abs(freqs - freq_bounds[0]))
@@ -121,7 +121,9 @@ def fourier_transform(t, x, axis=0, rw_freq=0, unit_convert=1, freq_bounds=None,
         X = X[min(i0, i1):(max(i0, i1) + 1)]
         freqs = freqs[min(i0, i1):(max(i0, i1) + 1)]
 
-    return freqs[::rev], X[::rev]
+    index = tuple(slice(None, None, rev) if n == axis else slice(None)
+                  for n in xrange(len(x.shape)))
+    return freqs[::rev], X[index]
 
 
 def return_fourier_transform(func):
