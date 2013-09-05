@@ -4,21 +4,10 @@ import numpy as np
 
 from qspectra.hamiltonian import ElectronicHamiltonian
 from qspectra.operator_tools import unit_vec
-import qspectra.dynamical_models.liouville_space as liouville_space
+import qspectra.dynamics.liouville_space as liouville_space
 
 
 class TestSubspaces(unittest.TestCase):
-    def test_n_excitations(self):
-        assert_equal(liouville_space.n_excitations(1), [1, 1, 0])
-        assert_equal(liouville_space.n_excitations(2), [1, 2, 1])
-        assert_equal(liouville_space.n_excitations(3), [1, 3, 3])
-
-    def test_extract_subspace(self):
-        self.assertItemsEqual(liouville_space.extract_subspace('gg,eg->gg'),
-                              'ge')
-        self.assertItemsEqual(liouville_space.extract_subspace('gg,ee,ff'),
-                              'gef')
-
     def test_liouville_subspace_indices(self):
         assert_equal(
             liouville_space.liouville_subspace_indices('eg,ge', 'ge', 2),
@@ -80,7 +69,8 @@ class ExampleLiouvilleSpaceModel(liouville_space.LiouvilleSpaceModel):
     Example subclass of LiouvilleSpaceModel, since LiouvilleSpaceModel still
     has some abstract methods
     """
-    def equation_of_motion(self, liouville_subspace):
+    @property
+    def evolution_super_operator(self):
         pass
 
     @property

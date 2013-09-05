@@ -217,3 +217,53 @@ def transition_operator(n, n_sites, subspace='gef', include_transitions='-+'):
                     sorted(states[i] + [n]) == states[j])):
                 dipole_matrix[i, j] = 1
     return dipole_matrix
+
+
+class SubspaceError(Exception):
+    """
+    Error class to indicate an invalid subspace
+    """
+
+
+def n_excitations(n_sites=1, n_vibrational_states=1):
+    """
+    Given the number of sites and vibrational states, returns the number of 0-,
+    1- and 2-excitation states as a three item array
+    """
+    n_exc = np.array([1, n_sites, int(n_sites * (n_sites - 1) / 2)])
+    return n_exc * n_vibrational_states
+
+
+def extract_subspace(subspaces_string):
+    """
+    Given a string a subspace in Liouville space or a mapping between subspaces,
+    returns the minimal containing Hilbert space subspace
+    """
+    return set(subspaces_string) - {',', '-', '>'}
+
+
+def hilbert_subspace_index(subspace, all_subspaces, n_sites,
+                           n_vibrational_states=1):
+    """
+    Given a Hilbert subspace 'g', 'e' or 'f' and the set of all subspaces on
+    which a state is defined, returns a slice object to select all elements in
+    the given subspace
+
+    Examples
+    --------
+    >>> hilbert_subspace_index('g', 'gef', 2)
+    slice(0, 1)
+    >>> hilbert_subspace_index('e', 'gef', 2)
+    slice(1, 3)
+    >>> hilbert_subspace_index('f', 'gef', 2)
+    slice(3, 4)
+    """
+    n_exc = n_excitations(n_sites, n_vibrational_states)
+    included_n_exc = ['gef'.index(s) for s in all_subspaces]
+    breaks = [0] + list(np.cumsum(n_exc[included_n_exc]))
+    if subspace in all_subspaces:
+        N = all_subspaces.index(subspace)
+        return slice(breaks[N], breaks[N + 1])
+    else:
+        raise SubspaceError("{} not in set of all subspaces '{}'".format(
+                            subspace, all_subspaces))
