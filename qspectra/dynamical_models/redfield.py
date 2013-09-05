@@ -2,7 +2,6 @@ import numpy as np
 
 from ..operator_tools import basis_transform
 from .liouville_space import (super_commutator_matrix, tensor_to_super,
-                              liouville_subspace_indices,
                               LiouvilleSpaceModel)
 from ..utils import memoized_property
 
@@ -129,38 +128,14 @@ class RedfieldModel(LiouvilleSpaceModel):
         ----------
         Nitzan (2006)
         """
-        super(RedfieldModel, self).__init__(hamiltonian, rw_freq, hilbert_subspace)
-        self.unit_convert = unit_convert
+        super(RedfieldModel, self).__init__(hamiltonian, rw_freq,
+                                            hilbert_subspace, unit_convert)
         self.secular = secular
         self.discard_imag_corr = discard_imag_corr
 
     @memoized_property
-    def redfield_super_operator(self):
+    def evolution_super_operator(self):
         return (self.unit_convert
                 * redfield_evolve(self.hamiltonian, self.hilbert_subspace,
                                   basis='site', secular=self.secular,
                                   discard_imag_corr=self.discard_imag_corr))
-
-    def equation_of_motion(self, liouville_subspace):
-        """
-        Return the equation of motion for this dynamical model in the given
-        subspace, a function which takes a state vector and returns its first
-        time derivative, for use in a numerical integration routine
-        """
-        index = liouville_subspace_indices(liouville_subspace,
-                                           self.hilbert_subspace,
-                                           self.hamiltonian.n_sites,
-                                           self.hamiltonian.n_vibrational_states)
-        mesh = np.ix_(index, index)
-        evolve_matrix = self.redfield_super_operator[mesh]
-        def eom(_, rho):
-            return evolve_matrix.dot(rho)
-        return eom
-
-    @property
-    def time_step(self):
-        """
-        The default time step at which to sample the equation of motion (in the
-        rotating frame)
-        """
-        return self.hamiltonian.time_step / self.unit_convert

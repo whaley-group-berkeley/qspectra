@@ -1,4 +1,4 @@
-from numpy.testing import assert_allclose
+from numpy.testing import assert_allclose, assert_equal
 import numpy as np
 import unittest
 
@@ -69,3 +69,27 @@ class TestExtendedStates(unittest.TestCase):
                          [1, 0, 0, 0],
                          [0, 0, 0, 0],
                          [0, 0, 1, 0]])
+
+
+class TestSubspaces(unittest.TestCase):
+    def test_n_excitations(self):
+        assert_equal(operator_tools.n_excitations(1), [1, 1, 0])
+        assert_equal(operator_tools.n_excitations(2), [1, 2, 1])
+        assert_equal(operator_tools.n_excitations(3), [1, 3, 3])
+        assert_equal(operator_tools.n_excitations(3, 2), [2, 6, 6])
+
+    def test_extract_subspace(self):
+        self.assertItemsEqual(operator_tools.extract_subspace('gg,eg->gg'),
+                              'ge')
+        self.assertItemsEqual(operator_tools.extract_subspace('gg,ee,ff'),
+                              'gef')
+
+    def test_hilbert_space_index(self):
+        self.assertEquals(operator_tools.hilbert_subspace_index('g', 'gef', 3),
+                          slice(0, 1))
+        self.assertEquals(operator_tools.hilbert_subspace_index('e', 'gef', 3),
+                          slice(1, 4))
+        self.assertEquals(operator_tools.hilbert_subspace_index('f', 'gef', 3),
+                          slice(4, 7))
+        self.assertEquals(operator_tools.hilbert_subspace_index('f', 'ef', 3),
+                          slice(3, 6))
