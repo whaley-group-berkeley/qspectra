@@ -4,7 +4,7 @@ import numpy as np
 
 from qspectra.hamiltonian import ElectronicHamiltonian
 from qspectra.operator_tools import unit_vec
-import qspectra.dynamical_models.liouville_space as liouville_space
+import qspectra.dynamics.liouville_space as liouville_space
 
 
 class TestSubspaces(unittest.TestCase):
