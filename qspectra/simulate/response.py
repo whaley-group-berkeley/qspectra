@@ -9,6 +9,7 @@ from ..polarization import (optional_2nd_order_isotropic_average,
 from .utils import (integrate, return_fourier_transform,
                     return_real_fourier_transform)
 from ..utils import ZeroArray, ndarray_list
+from ..dynamics.liouville_space import all_liouville_subspaces
 
 
 @optional_ensemble_average
@@ -240,7 +241,8 @@ THIRD_ORDER_PATHWAYS = {
 def third_order_response(dynamical_model, coherence_time_max,
                          population_time_max=None, population_times=None,
                          geometry='-++', polarization='xxxx',
-                         include_signal=None, **integrate_kwargs):
+                         include_signal=None, heisenberg_picture_t3=False,
+                         **integrate_kwargs):
     """
     Evaluate a linear response function
 
@@ -273,6 +275,17 @@ def third_order_response(dynamical_model, coherence_time_max,
         state-emission (ESE) and excited-state-absorption (ESA) contributions to
         the signal. In the double-quantum-coherence geometry (++-), valid
         choices are 'ESA1' and 'ESA2'. By default all pathways are included.
+    heisenberg_picture_t3 : boolean, default False
+        Whether or not to use to Heisenberg picture to simulate between the
+        third and fourth interactions. This option requires that the equation of
+        motion for the chosen dynamical model also supports a heisenberg_picture
+        option. This technique can lead to tremendous speed-ups when considering
+        a range of population times, because we no longer need to loop the
+        last time integration over all values t1 and t2. For more details, see:
+            Xu, J., Xu, R.-X., Abramavicius, D., Zhang, H. & Yan, Y. Advancing
+            hierarchical equations of motion for efficient evaluation of
+            coherent two-dimensional spectroscopy. Chin. J. Chem. Phys 24, 497
+            (2011). arXiv:1109.6168
     ensemble_size : int, optional
         If provided, perform an ensemble average of this signal over Hamiltonian
         disorder, as determined by the `sample_ensemble` method of the provided
@@ -294,8 +307,8 @@ def third_order_response(dynamical_model, coherence_time_max,
         Coherence, population and rephasing times at which the signal was
         simulated.
     signal : np.ndarray
-        One-dimensional array containing the simulated complex valued electric
-        field of the signal.
+        3D array of shape (len(t1), len(t2), len(t3)) containing the simulated
+        complex valued electric field of the signal.
     """
     # This is a reasonable first draft. However, there could be two significant
     # improvements for the next version:
@@ -308,7 +321,7 @@ def third_order_response(dynamical_model, coherence_time_max,
     #     matching multiplication by -1. This book-keeping, however, would not
     #     save us anytime in the integration steps (which are the probably the
     #     most expensive part of the calculation).
-    # (2) There are some redudant calculations, because some of the Liouville
+    # (2) There are some redundant calculations, because some of the Liouville
     #     space pathways are equivalent up to or after certain interactions. For
     #     example, all photon-echo pathways start with 'gg->ge', and both GSB
     #     and ESE photon-echo pathways end with 'eg->gg'.
@@ -342,15 +355,22 @@ def third_order_response(dynamical_model, coherence_time_max,
                                    **integrate_kwargs)
                           for init in V_rho1),
                          len(V_rho1))
-            total_signal += ndarray_list(
-                                (ndarray_list(
-                                    (integrate(eom[2], init_inner, t3,
-                                               save_func=V[3].expectation_value,
-                                               **integrate_kwargs)
-                                     for init_inner in init_outer),
-                                    len(init_outer))
-                                 for init_outer in V_rho2),
-                                len(V_rho2))
+            if heisenberg_picture_t3:
+                eom_heisen = dynamical_model.equation_of_motion(
+                    subspaces[3], heisenberg_picture=True)
+                V_Gt3 = integrate(eom_heisen, V[3].bra_vector, t3,
+                                  **integrate_kwargs)
+                total_signal += np.einsum('ci,abi', V_Gt3, V_rho2)
+            else:
+                total_signal += ndarray_list(
+                                    (ndarray_list(
+                                        (integrate(eom[2], init_inner, t3,
+                                                   save_func=V[3].expectation_value,
+                                                   **integrate_kwargs)
+                                         for init_inner in init_outer),
+                                        len(init_outer))
+                                     for init_outer in V_rho2),
+                                    len(V_rho2))
     if isinstance(total_signal, ZeroArray):
         if geometry == '++-':
             raise ValueError('include_signal must include at least one of '
