@@ -1,32 +1,12 @@
+from abc import abstractproperty
 import numpy as np
 
 from .generic import DynamicalModel, SystemOperator
+from ..operator_tools import SubspaceError, n_excitations
 from ..utils import memoized_property
 
 
-class SubspaceError(Exception):
-    """
-    Error class to indicate an invalid subspace
-    """
-
-
-def n_excitations(n_sites):
-    """
-    Given a number of sites, returns the number of 0-, 1- and 2-excitation
-    states as a three item array
-    """
-    return np.array([1, n_sites, int(n_sites * (n_sites - 1) / 2)])
-
-
-def extract_subspace(subspaces_string):
-    """
-    Given a string a subspace in Liouville space or a mapping between subspaces,
-    returns the minimal containing Hilbert space subspace
-    """
-    return set(subspaces_string) - {',', '-', '>'}
-
-
-def liouville_subspace_indices(liouville_subspace, subspace, n_sites,
+def liouville_subspace_indices(liouville_subspace, full_subspace, n_sites,
                                n_vibrational_states=1):
     """
     Returns indices of the full vectorized density operator in the given
@@ -34,9 +14,9 @@ def liouville_subspace_indices(liouville_subspace, subspace, n_sites,
     """
     total_states = 0
     cuts = {}
-    exc_n_states = n_vibrational_states * n_excitations(n_sites)
+    exc_n_states = n_excitations(n_sites, n_vibrational_states)
     for excitation, n_states in zip('gef', exc_n_states):
-        if excitation in subspace:
+        if excitation in full_subspace:
             cuts[excitation] = np.arange(n_states) + total_states
             total_states += n_states
     keep = np.zeros((total_states, total_states))
@@ -45,7 +25,7 @@ def liouville_subspace_indices(liouville_subspace, subspace, n_sites,
             keep[np.ix_(cuts[row], cuts[col])] = 1
         except KeyError:
             raise SubspaceError("{}{} not in subspace '{}'".format(
-                                row, col, subspace))
+                                row, col, full_subspace))
     return den_to_vec(keep).nonzero()[0]
 
 
@@ -131,7 +111,8 @@ def super_right_matrix(operator):
 
 
 class LiouvilleSpaceModel(DynamicalModel):
-    def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef'):
+    def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
+                 unit_convert=1):
         """
         DynamicalModel for Liouville space
 
@@ -148,6 +129,8 @@ class LiouvilleSpaceModel(DynamicalModel):
         hilbert_subspace : container, default 'ge'
             Container of any or all of 'g', 'e' and 'f' indicating the desired
             Hilbert subspace on which to calculate the Redfield tensor.
+        unit_convert : number, optional
+            Unit conversion from energy to time units (default 1).
 
         References
         ----------
@@ -156,6 +139,7 @@ class LiouvilleSpaceModel(DynamicalModel):
         self.hamiltonian = hamiltonian.in_rotating_frame(rw_freq)
         self.rw_freq = self.hamiltonian.energy_offset
         self.hilbert_subspace = hilbert_subspace
+        self.unit_convert = unit_convert
 
     def _liouville_subspace_indices(self, liouville_subspace, subspace=None):
         if subspace is None:
@@ -169,6 +153,23 @@ class LiouvilleSpaceModel(DynamicalModel):
         index = self._liouville_subspace_indices(liouville_subspace)
         return den_to_vec(rho0)[index]
 
+    @abstractproperty
+    def evolution_super_operator(self):
+        pass
+
+    def equation_of_motion(self, liouville_subspace):
+        """
+        Return the equation of motion for this dynamical model in the given
+        subspace, a function which takes a state vector and returns its first
+        time derivative, for use in a numerical integration routine
+        """
+        index = self._liouville_subspace_indices(liouville_subspace)
+        mesh = np.ix_(index, index)
+        evolve_matrix = self.evolution_super_operator[mesh]
+        def eom(t, rho):
+            return evolve_matrix.dot(rho)
+        return eom
+
     def map_between_subspaces(self, state, from_subspace, to_subspace):
         from_indices, to_indices = map(self._liouville_subspace_indices,
                                        [from_subspace, to_subspace])
@@ -176,6 +177,14 @@ class LiouvilleSpaceModel(DynamicalModel):
         new_state = den_to_vec(np.zeros((N, N), dtype=complex))
         new_state[from_indices] = state
         return new_state[to_indices]
+
+    @property
+    def time_step(self):
+        """
+        The default time step at which to sample the equation of motion (in the
+        rotating frame)
+        """
+        return self.hamiltonian.time_step / self.unit_convert
 
     def dipole_operator(self, liouv_subspace_map, polarization,
                         transitions='-+'):
