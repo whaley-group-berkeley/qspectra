@@ -28,6 +28,14 @@ class TestSubspaces(unittest.TestCase):
             liouville_space.liouville_subspace_indices('eg', 'ge', 1, 2),
             [2, 3, 6, 7])
 
+    def test_all_liouville_subspaces(self):
+        self.assertEquals(liouville_space.all_liouville_subspaces('g'),
+                          'gg')
+        self.assertEquals(liouville_space.all_liouville_subspaces('ge'),
+                          'gg,ge,eg,ee')
+        self.assertEquals(liouville_space.all_liouville_subspaces('gef'),
+                          'gg,ge,gf,eg,ee,ef,fg,fe,ff')
+
 
 class TestSuperOperators(unittest.TestCase):
     def setUp(self):
@@ -45,22 +53,32 @@ class TestSuperOperators(unittest.TestCase):
                         self.assertEquals(R_tensor[i, j, k, l],
                                           R_super[i + 2 * j, k + 2 * l])
 
-    def test_vec_den(self):
-        assert_allclose(self.rho_v, liouville_space.den_to_vec(self.rho_d))
-        assert_allclose(liouville_space.vec_to_den(self.rho_v), self.rho_d)
-        assert_allclose(liouville_space.den_to_vec(
-            liouville_space.vec_to_den(self.rho_v)), self.rho_v)
+    def test_ket_vec(self):
+        assert_allclose(self.rho_v,
+                        liouville_space.matrix_to_ket_vec(self.rho_d))
+        assert_allclose(liouville_space.ket_vec_to_matrix(self.rho_v),
+                        self.rho_d)
+        assert_allclose(liouville_space.matrix_to_ket_vec(
+                            liouville_space.ket_vec_to_matrix(self.rho_v)),
+                        self.rho_v)
+
+    def test_bra_vec(self):
+        rho_bra_vec = liouville_space.matrix_to_bra_vec(self.rho_d)
+        assert_allclose(rho_bra_vec, 0.25 * np.array([1, 2 - 2j, 2 + 2j, 3]))
+        operator_vec = liouville_space.matrix_to_ket_vec(self.operator)
+        assert_allclose(np.einsum('ij,ji', self.rho_d, self.operator),
+                        rho_bra_vec.dot(operator_vec))
 
     def test_super_matrices(self):
         assert_allclose(
-            liouville_space.den_to_vec(self.operator.dot(self.rho_d)),
+            liouville_space.matrix_to_ket_vec(self.operator.dot(self.rho_d)),
             liouville_space.super_left_matrix(self.operator).dot(self.rho_v))
         assert_allclose(
-            liouville_space.den_to_vec(self.rho_d.dot(self.operator)),
+            liouville_space.matrix_to_ket_vec(self.rho_d.dot(self.operator)),
             liouville_space.super_right_matrix(self.operator).dot(self.rho_v))
         assert_allclose(
-            liouville_space.den_to_vec(self.operator.dot(self.rho_d)
-                                       - self.rho_d.dot(self.operator)),
+            liouville_space.matrix_to_ket_vec(self.operator.dot(self.rho_d)
+                                              - self.rho_d.dot(self.operator)),
             liouville_space.super_commutator_matrix(self.operator).dot(self.rho_v))
 
 

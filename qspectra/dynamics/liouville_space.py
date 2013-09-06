@@ -1,4 +1,5 @@
 from abc import abstractproperty
+import itertools
 import numpy as np
 
 from .generic import DynamicalModel, SystemOperator
@@ -26,22 +27,43 @@ def liouville_subspace_indices(liouville_subspace, full_subspace, n_sites,
         except KeyError:
             raise SubspaceError("{}{} not in subspace '{}'".format(
                                 row, col, full_subspace))
-    return den_to_vec(keep).nonzero()[0]
+    return matrix_to_ket_vec(keep).nonzero()[0]
 
 
-def den_to_vec(rho_den):
+def all_liouville_subspaces(hilbert_subspace):
     """
-    Transform a density operator from matrix to vectorized (stacked column) form
+    Given a Hilbert subspace, return a comma separated list with all included
+    Liouville subspaces
+
+    Example
+    -------
+    >>> all_liouville_subspaces('ge')
+    'gg,ge,eg,ee'
     """
-    return rho_den.reshape((-1), order='F')
+    return ','.join(''.join(s) for s
+                    in itertools.product(hilbert_subspace, repeat=2))
 
 
-def vec_to_den(rho_vec):
+def matrix_to_ket_vec(matrix):
     """
-    Transform a density operator from vectorized (stacked column) to matrix form
+    Transform an operator from matrix to vectorized (stacked column) form
     """
-    N = int(np.sqrt(np.prod(rho_vec.shape)))
-    return rho_vec.reshape((N, N), order='F')
+    return matrix.reshape((-1), order='F')
+
+
+def ket_vec_to_matrix(ket_vec):
+    """
+    Transform an operator vectorized (stacked column) form into a matrix
+    """
+    N = int(np.sqrt(np.prod(ket_vec.shape)))
+    return ket_vec.reshape((N, N), order='F')
+
+
+def matrix_to_bra_vec(matrix):
+    """
+    Transform an operator from matrix to vectorized (stacked row) form
+    """
+    return matrix.reshape((-1), order='C')
 
 
 def tensor_to_super(tensor_operator):
@@ -151,13 +173,13 @@ class LiouvilleSpaceModel(DynamicalModel):
     def ground_state(self, liouville_subspace):
         rho0 = self.hamiltonian.ground_state(self.hilbert_subspace)
         index = self._liouville_subspace_indices(liouville_subspace)
-        return den_to_vec(rho0)[index]
+        return matrix_to_ket_vec(rho0)[index]
 
     @abstractproperty
     def evolution_super_operator(self):
         pass
 
-    def equation_of_motion(self, liouville_subspace):
+    def equation_of_motion(self, liouville_subspace, heisenberg_picture=False):
         """
         Return the equation of motion for this dynamical model in the given
         subspace, a function which takes a state vector and returns its first
@@ -166,6 +188,12 @@ class LiouvilleSpaceModel(DynamicalModel):
         index = self._liouville_subspace_indices(liouville_subspace)
         mesh = np.ix_(index, index)
         evolve_matrix = self.evolution_super_operator[mesh]
+        if heisenberg_picture:
+            # This works because these two equations of motion are equivalent:
+            #     rho.reshape(-1, 1).dot(L)
+            # and:
+            #     L.T.dot(rho)
+            evolve_matrix = evolve_matrix.T
         def eom(t, rho):
             return evolve_matrix.dot(rho)
         return eom
@@ -174,7 +202,7 @@ class LiouvilleSpaceModel(DynamicalModel):
         from_indices, to_indices = map(self._liouville_subspace_indices,
                                        [from_subspace, to_subspace])
         N = self.hamiltonian.n_states(self.hilbert_subspace)
-        new_state = den_to_vec(np.zeros((N, N), dtype=complex))
+        new_state = matrix_to_ket_vec(np.zeros((N, N), dtype=complex))
         new_state[from_indices] = state
         return new_state[to_indices]
 
@@ -217,6 +245,13 @@ class LiouvilleSpaceOperator(SystemOperator):
         self.from_indices, self.to_indices = \
             map(dynamical_model._liouville_subspace_indices, liouv_subspaces)
         self.super_op_mesh = np.ix_(self.to_indices, self.from_indices)
+
+    @property
+    def bra_vector(self):
+        # cast the operator to a complex vector so integrate methods handle it
+        # properly
+        operator = np.asanyarray(self.operator, dtype=complex)
+        return matrix_to_bra_vec(operator)[self.from_indices]
 
     @memoized_property
     def _super_left_matrix(self):
