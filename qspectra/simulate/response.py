@@ -9,15 +9,15 @@ from ..polarization import (optional_2nd_order_isotropic_average,
 from .utils import (integrate, return_fourier_transform,
                     return_real_fourier_transform)
 from ..utils import ZeroArray, ndarray_list
-from ..dynamics.liouville_space import all_liouville_subspaces
 
 
 @optional_ensemble_average
 @optional_2nd_order_isotropic_average
 def linear_response(dynamical_model, liouv_space_path, time_max,
-                    initial_state=None, polarization='xx', **integrate_kwargs):
+                    initial_state=None, polarization='xx',
+                    heisenberg_picture=True, **integrate_kwargs):
     """
-    Evaluate a linear response function
+    Evaluate a linear response function under the rotating wave approximation
 
     Parameters
     ----------
@@ -30,8 +30,8 @@ def linear_response(dynamical_model, liouv_space_path, time_max,
         Maximum time for which to simulate dynamics between the first and second
         interactions.
     initial_state : np.ndarray, optional
-        Initial condition for the state vector, which should be defined on the
-        first Liouville subspace in `liouv_space_path`. Defaults to the
+        Initial condition(s) for the state vector, which should be defined on
+        the first Liouville subspace in `liouv_space_path`. Defaults to the
         ground state of the dynamical model.
     geometry : string
         String of '+' or '-' terms of the same length as pulses indicating
@@ -41,6 +41,13 @@ def linear_response(dynamical_model, liouv_space_path, time_max,
         - 'x', 'y' or 'z', interepreted as the respective unit vectors
         - Angles of rotation from [1, 0, 0] in the x-y plane
         - 3D lists, tuples or arrays of numbers
+    heisenberg_picture : boolean, default True
+        Whether or not to simulate in the Heisenberg picture (instead of the
+        Schroedinger picture). This option requires that the equation of motion
+        for the chosen dynamical model also supports a heisenberg_picture
+        option. If there are multiple initial values, simulating in the
+        Heisenberg picture is much faster, since only one integration needs to
+        be performed along the time axis. See Ref. [1] for more details.
     ensemble_size : int, optional
         If provided, perform an ensemble average of this signal over Hamiltonian
         disorder, as determined by the `sample_ensemble` method of the provided
@@ -63,24 +70,37 @@ def linear_response(dynamical_model, liouv_space_path, time_max,
     signal : np.ndarray
         One-dimensional array containing the simulated complex valued electric
         field of the signal.
+
+    References
+    ----------
+    [1] Xu, J., Xu, R.-X., Abramavicius, D., Zhang, H. & Yan, Y. Advancing
+        hierarchical equations of motion for efficient evaluation of
+        coherent two-dimensional spectroscopy. Chin. J. Chem. Phys 24, 497
+        (2011). arXiv:1109.6168
     """
-    initial_liouv_subspace, int_liouv_subspace, final_liouv_subspace = \
-        liouv_space_path.split('->')
+    subspaces = liouv_space_path.split('->')
     if initial_state is None:
-        initial_state = dynamical_model.ground_state(initial_liouv_subspace)
+        initial_state = dynamical_model.ground_state(subspaces[0])
 
     t = np.arange(0, time_max, dynamical_model.time_step)
     signal = ZeroArray()
-    for sim_subspace in int_liouv_subspace.split(','):
-        V2 = dynamical_model.dipole_create(initial_liouv_subspace + '->'
-                                           + sim_subspace, polarization[0])
-        V2_rho = V2.commutator(initial_state)
-        eom = dynamical_model.equation_of_motion(sim_subspace)
-        V3 = dynamical_model.dipole_destroy(sim_subspace + '->'
-                                            + final_liouv_subspace,
-                                            polarization[1])
-        signal -= integrate(eom, V2_rho, t, save_func=V3.expectation_value,
-                            **integrate_kwargs)
+    for sim_subspace in subspaces[1].split(','):
+        V = [dynamical_model.dipole_operator(
+                '{}->{}'.format(sub_start, sub_end), polar, trans)
+             for sub_start, sub_end, polar, trans
+             in zip(subspaces[:-1], subspaces[1:], polarization, '+-')]
+        V_rho2 = np.apply_along_axis(V[0].commutator, -1, initial_state)
+        if heisenberg_picture:
+            eom = dynamical_model.equation_of_motion(sim_subspace,
+                                                     heisenberg_picture=True)
+            V_Gt3 = integrate(eom, V[1].bra_vector, t,
+                              **integrate_kwargs)
+            signal += np.tensordot(V_Gt3, V_rho2, (-1, -1))
+        else:
+            eom = dynamical_model.equation_of_motion(sim_subspace)
+            signal -= integrate(eom, V_rho2, t,
+                                save_func=V[1].expectation_value,
+                                **integrate_kwargs)
     return (t, signal)
 
 
@@ -159,7 +179,7 @@ def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
     dynamical_model : DynamicalModel
         Object obeying the DynamicModel interface.
     state : np.ndarray
-        State vector for the system at the time of the probe pulse.
+        State vector(s) for the system at the time of the probe pulse.
     time_max : number
         Maximum time for which to simulate dynamics between the probe and signal
         interactions.
@@ -203,9 +223,10 @@ def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
     for path in PUMP_PROBE_PATHWAYS:
         if path in include_signal:
             liouv_space_path = PUMP_PROBE_PATHWAYS[path]
-            path_start = liouv_space_path.split('->')[0]
-            init_state_portion = dynamical_model.map_between_subspaces(
-                initial_state, initial_liouv_subspace, path_start)
+            map_subspace = lambda state: dynamical_model.map_between_subspaces(
+                state, initial_liouv_subspace, liouv_space_path.split('->')[0])
+            init_state_portion = np.apply_along_axis(map_subspace, -1,
+                                                     initial_state)
             (t, signal) = linear_response(dynamical_model, liouv_space_path,
                                           time_max, init_state_portion,
                                           polarization, **integrate_kwargs)
@@ -241,10 +262,10 @@ THIRD_ORDER_PATHWAYS = {
 def third_order_response(dynamical_model, coherence_time_max,
                          population_time_max=None, population_times=None,
                          geometry='-++', polarization='xxxx',
-                         include_signal=None, heisenberg_picture_t3=False,
+                         include_signal=None, heisenberg_picture_t3=True,
                          **integrate_kwargs):
     """
-    Evaluate a linear response function
+    Evaluate a third order response function in the rotating wave approximation
 
     Parameters
     ----------
@@ -275,17 +296,14 @@ def third_order_response(dynamical_model, coherence_time_max,
         state-emission (ESE) and excited-state-absorption (ESA) contributions to
         the signal. In the double-quantum-coherence geometry (++-), valid
         choices are 'ESA1' and 'ESA2'. By default all pathways are included.
-    heisenberg_picture_t3 : boolean, default False
+    heisenberg_picture_t3 : boolean, default True
         Whether or not to use to Heisenberg picture to simulate between the
         third and fourth interactions. This option requires that the equation of
         motion for the chosen dynamical model also supports a heisenberg_picture
         option. This technique can lead to tremendous speed-ups when considering
-        a range of population times, because we no longer need to loop the
-        last time integration over all values t1 and t2. For more details, see:
-            Xu, J., Xu, R.-X., Abramavicius, D., Zhang, H. & Yan, Y. Advancing
-            hierarchical equations of motion for efficient evaluation of
-            coherent two-dimensional spectroscopy. Chin. J. Chem. Phys 24, 497
-            (2011). arXiv:1109.6168
+        a range of population times, because we no longer need to loop the last
+        time integration over all values t1 and t2. See Ref. [2] for more
+        details.
     ensemble_size : int, optional
         If provided, perform an ensemble average of this signal over Hamiltonian
         disorder, as determined by the `sample_ensemble` method of the provided
@@ -309,6 +327,17 @@ def third_order_response(dynamical_model, coherence_time_max,
     signal : np.ndarray
         3D array of shape (len(t1), len(t2), len(t3)) containing the simulated
         complex valued electric field of the signal.
+
+    References
+    ----------
+    [1] Abramavicius, D., Palmieri, B., Voronine, D. V., Sanda, F. & Mukamel, S.
+        Coherent Multidimensional Optical Spectroscopy of Excitons in Molecular
+        Aggregates; Quasiparticle versus Supermolecule Perspectives. Chem. Rev.
+        109, 2350-2408 (2009).
+    [2] Xu, J., Xu, R.-X., Abramavicius, D., Zhang, H. & Yan, Y. Advancing
+        hierarchical equations of motion for efficient evaluation of
+        coherent two-dimensional spectroscopy. Chin. J. Chem. Phys 24, 497
+        (2011). arXiv:1109.6168
     """
     # This is a reasonable first draft. However, there could be two significant
     # improvements for the next version:
@@ -349,12 +378,9 @@ def third_order_response(dynamical_model, coherence_time_max,
             V_rho1 = integrate(eom[0], V_rho0, t1,
                                save_func=V[1].commutator,
                                 **integrate_kwargs)
-            V_rho2 = ndarray_list(
-                         (integrate(eom[1], init, t2,
-                                   save_func=V[2].commutator,
-                                   **integrate_kwargs)
-                          for init in V_rho1),
-                         len(V_rho1))
+            V_rho2 = integrate(eom[1], V_rho1, t2,
+                               save_func=V[2].commutator,
+                               **integrate_kwargs)
             if heisenberg_picture_t3:
                 eom_heisen = dynamical_model.equation_of_motion(
                     subspaces[3], heisenberg_picture=True)
