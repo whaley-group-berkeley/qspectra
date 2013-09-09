@@ -3,9 +3,37 @@ from numpy import pi
 import numpy as np
 import scipy.integrate
 
+from ..utils import ndarray_list
+
 
 class IntegratorError(Exception):
     pass
+
+
+def _integrate(f, y0, t, method_name, f_params, save_func, **kwargs):
+    solver = scipy.integrate.ode(f)
+    solver.set_integrator(method_name, **kwargs)
+    solver.set_initial_value(y0, t[0])
+    if f_params is not None:
+        solver.set_f_params(**f_params)
+
+    if save_func is None:
+        save_func = lambda x: x
+    y0_saved = save_func(y0)
+    try:
+        save_shape = list(y0_saved.shape)
+    except AttributeError:
+        # y0_saved is just a number
+        save_shape = []
+    y = np.empty([len(t)] + save_shape, dtype=y0_saved.dtype)
+
+    y[0] = y0_saved
+    for i in xrange(1, len(t)):
+        if solver.successful():
+            y[i] = save_func(solver.integrate(t[i]))
+        else:
+            raise IntegratorError('integration failed at time {}'.format(t[i]))
+    return y
 
 
 def integrate(f, y0, t, method_name='zvode', f_params=None, save_func=None,
@@ -19,12 +47,15 @@ def integrate(f, y0, t, method_name='zvode', f_params=None, save_func=None,
 
     with the initial value y0 at times specified by the vector t.
 
+    If y0 is a higher than 1-dimensional vector, integrate only integrates over
+    the last axes, looping over all prior axes.
+
     Parameters
     ----------
     f : function
         Funtion to integrate. Should take arguments like f(t, y, **f_params).
     y0 : np.ndarray
-        Initial value.
+        Initial values.
     t : np.ndarray
         Times at which to return the calculate state of the system. The system
         is assumed to be in the state y0 at time t[0].
@@ -45,30 +76,12 @@ def integrate(f, y0, t, method_name='zvode', f_params=None, save_func=None,
         2D array containing the results of calling save_func on the state of the
         integrator at all given times t.
     """
-    if save_func is None:
-        save_func = lambda x: x
-
-    solver = scipy.integrate.ode(f)
-    solver.set_integrator(method_name, **kwargs)
-    solver.set_initial_value(y0, t[0])
-    if f_params is not None:
-        solver.set_f_params(**f_params)
-
-    y0_saved = save_func(y0)
-    try:
-        save_shape = list(y0_saved.shape)
-    except AttributeError:
-        # y0_saved is just a number
-        save_shape = []
-    y = np.empty([len(t)] + save_shape, dtype=y0_saved.dtype)
-
-    y[0] = y0_saved
-    for i in xrange(1, len(t)):
-        if solver.successful():
-            y[i] = save_func(solver.integrate(t[i]))
-        else:
-            raise IntegratorError('integration failed at time {}'.format(t[i]))
-    return y
+    if len(y0.shape) == 1:
+        return _integrate(f, y0, t, method_name, f_params, save_func, **kwargs)
+    else:
+        return ndarray_list((integrate(f, y0i, t, method_name, f_params,
+                                       save_func, **kwargs)
+                             for y0i in y0), len(y0))
 
 
 def fourier_transform(t, x, axis=0, rw_freq=0, unit_convert=1, freq_bounds=None,
