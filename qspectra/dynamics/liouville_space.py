@@ -140,13 +140,18 @@ class LiouvilleSpaceOperator(SystemOperator):
             Matrix representation of the operator in the Hilbert subspace of
             `dynamical_model`.
         liouv_subspace_map : string
-            String in the form 'eg->gg' indicating the mapping between
-            Liouville subspaces on which the operator should act.
+            String in the form 'eg,fe->gg,ee' indicating the mapping between
+            Liouville subspaces on which the operator should act. Optionally,
+            only one Liouville subspace may be provided (e.g., a string of the
+            form 'eg,fe'), in which case the super operator is assumed to map
+            from and to the same subspace.
         dynamical_model : LiouvilleSpaceModel
-            LiouvilleSpaceModel on which this operator acts.
+            The dynamical model on which this operator acts.
         """
         self.operator = operator
-        liouv_subspaces = liouv_subspace_map.split('->')
+        liouv_subspaces = (liouv_subspace_map.split('->')
+                           if '->' in liouv_subspace_map
+                           else [liouv_subspace_map, liouv_subspace_map])
         self.from_indices, self.to_indices = \
             map(dynamical_model.liouville_subspace_index, liouv_subspaces)
         self.super_op_mesh = np.ix_(self.to_indices, self.from_indices)
@@ -194,7 +199,7 @@ class LiouvilleSpaceModel(DynamicalModel):
     Subclasses must override the `evolution_super_operator` property or the
     `equation_of_motion` method.
     """
-    SystemOperator = LiouvilleSpaceOperator
+    system_operator = LiouvilleSpaceOperator
 
     def liouville_subspace_index(self, subspace):
         return liouville_subspace_index(subspace, self.hilbert_subspace,

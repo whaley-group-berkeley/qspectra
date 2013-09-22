@@ -83,7 +83,7 @@ class DynamicalModel(object):
         """
         operator = self.hamiltonian.dipole_operator(self.hilbert_subspace,
                                                     polarization, transitions)
-        return SystemOperator(operator, liouv_subspace_map, self)
+        return self.system_operator(operator, liouv_subspace_map, self)
 
     def dipole_destroy(self, liouville_subspace_map, polarization):
         """

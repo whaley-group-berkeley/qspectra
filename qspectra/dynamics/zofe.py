@@ -48,7 +48,7 @@ class ZOFESpaceOperator(SystemOperator):
 
 
 class ZOFEModel(DynamicalModel):
-    SystemOperator = ZOFESpaceOperator
+    system_operator = ZOFESpaceOperator
 
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
                  unit_convert=1):
