@@ -153,7 +153,7 @@ class SystemOperator(object):
     @abstractmethod
     def right_multiply(self, state):
         """
-        Returns the left multiplication of the system-field operator with the
+        Returns the right multiplication of the system-field operator with the
         given state
         """
 
