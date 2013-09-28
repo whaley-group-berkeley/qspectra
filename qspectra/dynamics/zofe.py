@@ -98,7 +98,7 @@ class ZOFEModel(DynamicalModel):
         
 
 
-    def state_vec_to_operators(self, state):
+    def state_vec_to_operators(self, rho_oop_vec):
         n_stat = self.hamiltonian.n_states(self.hilbert_subspace)
         n_stat_sq = n_stat**2
         rho = rho_oop_vec[:n_stat_sq].reshape((n_stat, n_stat), order='F')
