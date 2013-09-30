@@ -72,7 +72,7 @@ class ZOFEModel(DynamicalModel):
 
         References
         ----------
-        See references in module containing the ZOFE master equation
+        See references in method containing the ZOFE master equation
         """
         super(ZOFEModel, self).__init__(
              hamiltonian, rw_freq, hilbert_subspace, unit_convert)
@@ -194,7 +194,7 @@ class ZOFEModel(DynamicalModel):
         rhodot = d_op + f_op
 
 
-        # O operator evolution equation (uses a_op from above)
+        # O operator evolution equation (uses b_op from above)
         oopdot = (np.einsum('ij,jkl->ijkl', Gamma, L_n)
                   - np.einsum('ij,ijkl->ijkl', w, oop)
                   + np.einsum('ij,kljm->klim', b_op, oop)
@@ -241,6 +241,7 @@ class ZOFEModel(DynamicalModel):
         sys_ham = self.hamiltonian.H(self.hilbert_subspace)
 
         def eom(t, rho_oop_vec):
-            return self.unit_convert * self.rhodot_oopdot_vec(t, rho_oop_vec,
-                                                              self.oop_shape, sys_ham, L_n, Gamma, w)
+            return (self.unit_convert
+                    * self.rhodot_oopdot_vec(t, rho_oop_vec,
+                                             self.oop_shape, sys_ham, L_n, Gamma, w))
         return eom
