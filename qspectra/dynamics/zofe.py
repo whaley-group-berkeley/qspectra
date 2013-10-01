@@ -117,7 +117,7 @@ class ZOFEModel(DynamicalModel):
 
 
     def rhodot_oopdot_vec(self, t, rho_oop_vec, oop_shape, ham, L_n, Gamma,
-                          w, ham_hermit=True, rho_hermit=True):
+                          w, ham_hermit=False, rho_hermit=False):
         """
         Calculates the time derivatives rhodot and oopdot,
         i.e., of the density matrix and the auxiliary operator
@@ -171,20 +171,20 @@ class ZOFEModel(DynamicalModel):
         sum_oop = oop.sum(axis=0) #sum over pseudomode index
     
         # ZOFE master equation
-        
-        a_op = np.tensordot(L_n.T.conj(), sum_oop, axes=([0, 2], [0, 1]))
+
+        a_op = np.tensordot(L_n.swapaxes(1,2).conj(), sum_oop, axes=([0, 2], [0, 1]))
         # tensordot is faster than einsum, so using tensordot when possible
 
         b_op = -1j*ham - a_op
         
         c_op = np.tensordot(np.tensordot(L_n, rho, axes=([2], [0])),
-                            sum_oop.T.conj(), axes=([0, 2], [0, 1]))
+                            sum_oop.swapaxes(1,2).conj(), axes=([0, 2], [0, 1]))
 
         d_op = np.dot(b_op, rho) + c_op
 
         if not rho_hermit:
             big_operator = np.tensordot(np.tensordot(sum_oop, rho, axes=([2], [0])),
-                                        L_n.T.conj(), axes=([0, 2], [0, 1]))
+                                        L_n.swapaxes(1,2).conj(), axes=([0, 2], [0, 1]))
             if ham_hermit:
                 f_op = rho.dot(b_op.T.conj()) + big_operator
             else:
