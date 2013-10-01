@@ -5,6 +5,8 @@ from ..utils import memoized_property
 
 from .generic import DynamicalModel, SystemOperator
 
+from .liouville_space import matrix_to_ket_vec
+
 
 class ZOFESpaceOperator(SystemOperator):
     def __init__(self, operator, liouv_subspace_map, dynamical_model):
@@ -20,31 +22,29 @@ class ZOFESpaceOperator(SystemOperator):
         dynamical_model : ZOFEModel
             ZOFE dynamical model on which this operator acts.
         """
-        from_space, to_space = liouv_subspace_map.split('->')
-        L1, R1 = map(dynamical_model.hilbert_subspace_indices, from_space)
-        L2, R2 = map(dynamical_model.hilbert_subspace_indices, to_space)
-        self.operator_L = operator[L2, L1]
-        self.operator_R = operator[R1, R2]
+        self.operator = operator
+        self.dynamical_model = dynamical_model
 
     def left_multiply(self, state):
         rho0, oop0 = self.dynamical_model.state_vec_to_operators(state)
-        rho1 = self.operator_L.dot(rho0)
-        oop1 = np.einsum('cd,abde->abce', self.operator_L, oop0) 
+        rho1 = self.operator.dot(rho0)
+        #oop1 = np.einsum('cd,abde->abce', self.operator, oop0)
+        oop1 = np.rollaxis(np.tensordot(self.operator, oop0, axes=[1, 2]), 0, 3) #faster than einsum
         return self.dynamical_model.operators_to_state_vec(rho1, oop1)
 
     def right_multiply(self, state):
         rho0, oop0 = self.dynamical_model.state_vec_to_operators(state)
-        rho1 = rho0.dot(self.operator_R)
-        oop1 = oop0.dot(self.operator_R)
+        rho1 = rho0.dot(self.operator)
+        oop1 = oop0.dot(self.operator)
         return self.dynamical_model.operators_to_state_vec(rho1, oop1)
 
     @memoized_property
     def expectation_value(self, state):
         rho0, _ = self.dynamical_model.state_vec_to_operators(state)
         # Proof: tr M rho = \sum_{ij} M_ij rho_ji
-        #return np.einsum('ij,ji', self.operator_L, rho0)
-        return np.tensordot(self.operator_L, rho0, axes=([0, 1], [1, 0])) # faster than einsum
+        return np.tensordot(self.operator, rho0, axes=([0, 1], [1, 0])) # faster than einsum
 
+    
 
 class ZOFEModel(DynamicalModel):
     system_operator = ZOFESpaceOperator
@@ -87,7 +87,7 @@ class ZOFEModel(DynamicalModel):
         n_stat = self.hamiltonian.n_states(self.hilbert_subspace)
 
         self.oop_shape = (numb_pm, n_sit, n_stat, n_stat)
-        
+
         
 
     def initial_state_and_oop_vec(self, initial_rho_vec):
@@ -95,8 +95,14 @@ class ZOFEModel(DynamicalModel):
         initial_oop = np.zeros(self.oop_shape, dtype=complex)
         return np.append(initial_rho_vec,
                          initial_oop.reshape((-1), order='F'))
-        
 
+    def ground_state(self, _):
+        rho0 = self.hamiltonian.ground_state(self.hilbert_subspace)
+        return self.initial_state_and_oop_vec(matrix_to_ket_vec(rho0))
+
+    def map_between_subspaces(self, state, from_subspace, to_subspace):
+        return state
+        
 
     def state_vec_to_operators(self, rho_oop_vec):
         n_stat = self.hamiltonian.n_states(self.hilbert_subspace)
@@ -107,12 +113,11 @@ class ZOFEModel(DynamicalModel):
 
     def operators_to_state_vec(self, rho, oop):
         return np.append(rho.reshape((-1), order='F'),
-                          oop.reshape((-1), order='F'))
+                         oop.reshape((-1), order='F'))
 
 
     def rhodot_oopdot_vec(self, t, rho_oop_vec, oop_shape, ham, L_n, Gamma,
-                          w, ham_hermit=False, rho_hermit=False):
-
+                          w, ham_hermit=True, rho_hermit=True):
         """
         Calculates the time derivatives rhodot and oopdot,
         i.e., of the density matrix and the auxiliary operator
@@ -177,28 +182,26 @@ class ZOFEModel(DynamicalModel):
 
         d_op = np.dot(b_op, rho) + c_op
 
-        if not ham_hermit and not rho_hermit:
-            f_op = np.dot(rho, 1j*ham
-                          - a_op.T.conj()) + np.tensordot(np.tensordot(sum_oop, rho, axes=([2], [0])),
-                                                        L_n.T.conj(), axes=([0, 2], [0, 1]))
-        if ham_hermit and not rho_hermit:
-            f_op = np.dot(rho, b_op.T.conj()) + np.tensordot(np.tensordot(sum_oop, rho, axes=([2], [0])),
-                                                             L_n.T.conj(), axes=([0, 2], [0, 1]))
-
-        if not ham_hermit and rho_hermit:
-            f_op = np.dot(rho, 1j*ham - a_op.T.conj()) + c_op.T.conj()
-
-        if ham_hermit and rho_hermit:
-            f_op = d_op.T.conj()
-
+        if not rho_hermit:
+            big_operator = np.tensordot(np.tensordot(sum_oop, rho, axes=([2], [0])),
+                                        L_n.T.conj(), axes=([0, 2], [0, 1]))
+            if ham_hermit:
+                f_op = rho.dot(b_op.T.conj()) + big_operator
+            else:
+                f_op = rho.dot(1j*ham - a_op.T.conj()) + big_operator
+        else:
+            if ham_hermit:
+                f_op = d_op.T.conj()
+            else:
+                f_op = rho.dot(1j*ham - a_op.T.conj()) + c_op.T.conj()                                   
+                                              
         rhodot = d_op + f_op
-
 
         # O operator evolution equation (uses b_op from above)
         oopdot = (np.einsum('ij,jkl->ijkl', Gamma, L_n)
                   - np.einsum('ij,ijkl->ijkl', w, oop)
-                  + np.einsum('ij,kljm->klim', b_op, oop)
-                  - np.einsum('ijkl,lm->ijkm', oop, b_op))
+                  + np.rollaxis(np.tensordot(b_op, oop, axes=[1, 2]), 0, 3)
+                  - oop.dot(b_op))
 
         return self.operators_to_state_vec(rhodot, oopdot)
 
@@ -220,7 +223,7 @@ class ZOFEModel(DynamicalModel):
         # cases of 'ge' and 'e' subspaces. However, in the two-exciton case 'gef', I have never checked
         # if ZOFE gives the right results.
 
-        L_n = [-1.*L for L in self.hamiltonian.system_bath_couplings(subspace=self.hilbert_subspace)]
+        L_n = np.array([-1.*L for L in self.hamiltonian.system_bath_couplings(subspace=self.hilbert_subspace)])
         # NOTE THE MINUS SIGN!!
         # For the subspace cases 'ge' and 'e', the system_bath_couplings() method and the function
         # coupling_operator_L_n()
