@@ -15,7 +15,7 @@ from ..utils import ZeroArray, ndarray_list
 @optional_2nd_order_isotropic_average
 def linear_response(dynamical_model, liouv_space_path, time_max,
                     initial_state=None, polarization='xx',
-                    heisenberg_picture=False, **integrate_kwargs):
+                    heisenberg_picture=True, **integrate_kwargs):
     """
     Evaluate a linear response function under the rotating wave approximation
 

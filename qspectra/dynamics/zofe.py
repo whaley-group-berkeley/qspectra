@@ -38,21 +38,11 @@ class ZOFESpaceOperator(SystemOperator):
         oop1 = oop0.dot(self.operator)
         return self.dynamical_model.operators_to_state_vec(rho1, oop1)
 
-    # @memoized_property
-    # def expectation_value(self, state):
-    #     rho0, _ = self.dynamical_model.state_vec_to_operators(state)
-    #     # Proof: tr M rho = \sum_{ij} M_ij rho_ji
-    #     return np.tensordot(self.operator, rho0, axes=([0, 1], [1, 0])) # faster than einsum
-#-----------------------------------
-    #NEW
-    @memoized_property
-    def expectation_value(self):
-        def expec(state):
-            rho0, _ = self.dynamical_model.state_vec_to_operators(state)
-            # Proof: tr M rho = \sum_{ij} M_ij rho_ji
-            return np.tensordot(self.operator, rho0, axes=([0, 1], [1, 0])) # faster than einsum
-        return expec
-#----------------------------------
+    def expectation_value(self, state):
+        rho0, _ = self.dynamical_model.state_vec_to_operators(state)
+        # Proof: tr M rho = \sum_{ij} M_ij rho_ji
+        return np.tensordot(self.operator, rho0, axes=([0, 1], [1, 0])) # faster than einsum
+
     
 
 class ZOFEModel(DynamicalModel):
