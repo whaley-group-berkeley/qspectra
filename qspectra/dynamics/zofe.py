@@ -1,10 +1,7 @@
 import numpy as np
 
 from ..bath import PseudomodeBath
-from ..utils import memoized_property
-
 from .generic import DynamicalModel, SystemOperator
-
 from .liouville_space import matrix_to_ket_vec
 
 
@@ -43,7 +40,6 @@ class ZOFESpaceOperator(SystemOperator):
         # Proof: tr M rho = \sum_{ij} M_ij rho_ji
         return np.tensordot(self.operator, rho0, axes=([0, 1], [1, 0])) # faster than einsum
 
-    
 
 class ZOFEModel(DynamicalModel):
     system_operator = ZOFESpaceOperator
@@ -84,10 +80,7 @@ class ZOFEModel(DynamicalModel):
         numb_pm = self.hamiltonian.bath.numb_pm
         n_sit = self.hamiltonian.n_sites
         n_stat = self.hamiltonian.n_states(self.hilbert_subspace)
-
         self.oop_shape = (numb_pm, n_sit, n_stat, n_stat)
-
-        
 
     def initial_state_and_oop_vec(self, initial_rho_vec):
         # initial auxiliary operator for the ZOFE master equation
@@ -101,11 +94,11 @@ class ZOFEModel(DynamicalModel):
 
     def map_between_subspaces(self, state, from_subspace, to_subspace):
         return state
-        
+
 
     def state_vec_to_operators(self, rho_oop_vec):
         n_stat = self.hamiltonian.n_states(self.hilbert_subspace)
-        n_stat_sq = n_stat**2
+        n_stat_sq = n_stat ** 2
         rho = rho_oop_vec[:n_stat_sq].reshape((n_stat, n_stat), order='F')
         oop = rho_oop_vec[n_stat_sq:].reshape(self.oop_shape, order='F')
         return rho, oop
@@ -113,7 +106,6 @@ class ZOFEModel(DynamicalModel):
     def operators_to_state_vec(self, rho, oop):
         return np.append(rho.reshape((-1), order='F'),
                          oop.reshape((-1), order='F'))
-
 
     def rhodot_oopdot_vec(self, t, rho_oop_vec, oop_shape, ham, L_n, Gamma,
                           w, ham_hermit=False, rho_hermit=False):
@@ -162,38 +154,33 @@ class ZOFEModel(DynamicalModel):
             (and references therein)
         Extend ZOFE master equation to two-exciton space: unpublished
         Speed up ZOFE master equation: unpublished
-
         """
-
         rho, oop = self.state_vec_to_operators(rho_oop_vec)
 
         sum_oop = oop.sum(axis=0) #sum over pseudomode index
-    
-        # ZOFE master equation
 
-        a_op = np.tensordot(L_n.swapaxes(1,2).conj(), sum_oop, axes=([0, 2], [0, 1]))
-        # tensordot is faster than einsum, so using tensordot when possible
-
-        b_op = -1j*ham - a_op
-        
+        a_op = np.tensordot(L_n.swapaxes(1, 2).conj(), sum_oop,
+                            axes=([0, 2], [0, 1]))
+        b_op = -1j * ham - a_op
         c_op = np.tensordot(np.tensordot(L_n, rho, axes=([2], [0])),
                             sum_oop.swapaxes(1,2).conj(), axes=([0, 2], [0, 1]))
-
         d_op = np.dot(b_op, rho) + c_op
 
         if not rho_hermit:
-            big_operator = np.tensordot(np.tensordot(sum_oop, rho, axes=([2], [0])),
-                                        L_n.swapaxes(1,2).conj(), axes=([0, 2], [0, 1]))
+            big_operator = np.tensordot(np.tensordot(sum_oop, rho,
+                                                     axes=([2], [0])),
+                                        L_n.swapaxes(1, 2).conj(),
+                                        axes=([0, 2], [0, 1]))
             if ham_hermit:
                 f_op = rho.dot(b_op.T.conj()) + big_operator
             else:
-                f_op = rho.dot(1j*ham - a_op.T.conj()) + big_operator
+                f_op = rho.dot(1j * ham - a_op.T.conj()) + big_operator
         else:
             if ham_hermit:
                 f_op = d_op.T.conj()
             else:
-                f_op = rho.dot(1j*ham - a_op.T.conj()) + c_op.T.conj()                                   
-                                              
+                f_op = rho.dot(1j * ham - a_op.T.conj()) + c_op.T.conj()
+
         rhodot = d_op + f_op
 
         # O operator evolution equation (uses b_op from above)
@@ -216,34 +203,23 @@ class ZOFEModel(DynamicalModel):
             raise NotImplementedError('ZOFE not implemented in the Heisenberg '
                                       'picture')
 
-        #L_n = coupling_operator_L_n(n_sites, n_states, with_ground_state=False, two_excitons=False)
-        # This is the function to build the coupling operators L_n that I had previously
-        # used for ZOFE calculations and checked in the
-        # cases of 'ge' and 'e' subspaces. However, in the two-exciton case 'gef', I have never checked
-        # if ZOFE gives the right results.
-
-        L_n = np.array([-1.*L for L in self.hamiltonian.system_bath_couplings(subspace=self.hilbert_subspace)])
         # NOTE THE MINUS SIGN!!
-        # For the subspace cases 'ge' and 'e', the system_bath_couplings() method and the function
-        # coupling_operator_L_n()
-        # that is commented out above give the same coupling operators.
-        # BUT, for the two-exciton case 'gef', they give different results!
-        # It is not clear yet, which of the two the right version for ZOFE is.
-        # I have to go through my notes about the extension of ZOFE to the two-exciton space again.
-        # So when using ZOFE for two-exciton calculations this issue has to be resolved first.
+        L_n = -np.asanyarray(
+            self.hamiltonian.system_bath_couplings(self.hilbert_subspace))
 
         # parameters of PseudomodeBath
         Omega = self.hamiltonian.bath.Omega
         gamma = self.hamiltonian.bath.gamma
         huang = self.hamiltonian.bath.huang
 
-        Gamma = Omega**2*huang
-        w = 1j*Omega+gamma
+        Gamma = Omega ** 2 * huang
+        w = 1j * Omega + gamma
 
         sys_ham = self.hamiltonian.H(self.hilbert_subspace)
 
         def eom(t, rho_oop_vec):
             return (self.unit_convert
                     * self.rhodot_oopdot_vec(t, rho_oop_vec,
-                                             self.oop_shape, sys_ham, L_n, Gamma, w))
+                                             self.oop_shape, sys_ham, L_n,
+                                             Gamma, w))
         return eom
