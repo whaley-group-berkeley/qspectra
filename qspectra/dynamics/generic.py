@@ -1,5 +1,6 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
 
+from ..operator_tools import hilbert_subspace_index
 from ..utils import copy_with_new_cache
 
 
@@ -11,16 +12,8 @@ class DynamicalModel(object):
     A DynamicalModel instance completely specifies how a system evolves freely
     and in response to applied fields.
 
-    To implement a new type of dynamical model, inherit from this class,
-    override all abstract methods and define the `rw_freq` attribute in the
-    __init__ method.
-
-    Attributes
-    ----------
-    rw_freq : float
-        The frequency of the rotating frame in which this model applies.
-        Typically, `rw_freq` would be defined by the hamiltonian which provides
-        the parameters to initialize a new DynamicalModel object.
+    To implement a new type of dynamical model, inherit from this class and
+    override all abstract methods
 
     Warning
     -------
@@ -32,6 +25,28 @@ class DynamicalModel(object):
     """
     __metaclass__ = ABCMeta
 
+    def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
+                 unit_convert=1):
+        """
+        Parameters
+        ----------
+        hamiltonian : hamiltonian.Hamiltonian
+            Hamiltonian object specifying the system
+        rw_freq : float, optional
+            Rotating wave frequency at which to calculate dynamics. By default,
+            the rotating wave frequency is chosen from the central frequency
+            of the Hamiltonian.
+        hilbert_subspace : container, default 'ge'
+            Container of any or all of 'g', 'e' and 'f' indicating the maximum
+            set of Hilbert subspace on which to calculate the dynamics.
+        unit_convert : number, optional
+            Unit conversion from energy to time units (default 1).
+        """
+        self.hamiltonian = hamiltonian.in_rotating_frame(rw_freq)
+        self.rw_freq = self.hamiltonian.energy_offset
+        self.hilbert_subspace = hilbert_subspace
+        self.unit_convert = unit_convert
+
     @abstractmethod
     def ground_state(self, liouville_subspace):
         """
@@ -39,12 +54,15 @@ class DynamicalModel(object):
         """
 
     @abstractmethod
-    def equation_of_motion(self, liouville_subspace):
+    def equation_of_motion(self, liouville_subspace, heisenberg_picture=False):
         """
         Return the equation of motion for this dynamical model in the given
         subspace, a function which takes the time and a state vector and returns
         the first time derivative of the state vector, for use in a numerical
         integration routine
+
+        If `heisenberg_picture` is True, returns an equation of motion for
+        operators in the Heisenberg picture.
         """
 
     @abstractmethod
@@ -57,13 +75,15 @@ class DynamicalModel(object):
         of the state is assumed to be zero.
         """
 
-    @abstractmethod
     def dipole_operator(self, liouv_subspace_map, polarization,
-                        include_transitions='-+'):
+                        transitions='-+'):
         """
         Return a dipole operator that follows the SystemOperator API for the
         given liouville_subspace_map, polarization and requested transitions
         """
+        operator = self.hamiltonian.dipole_operator(self.hilbert_subspace,
+                                                    polarization, transitions)
+        return self.system_operator(operator, liouv_subspace_map, self)
 
     def dipole_destroy(self, liouville_subspace_map, polarization):
         """
@@ -79,13 +99,6 @@ class DynamicalModel(object):
         """
         return self.dipole_operator(liouville_subspace_map, polarization, '+')
 
-    @abstractproperty
-    def time_step(self):
-        """
-        The default time step at which to sample the equation of motion (in the
-        rotating frame)
-        """
-
     def sample_ensemble(self, *args, **kwargs):
         """
         Yields `ensemble_size` re-samplings of this dynamical model by sampling
@@ -95,6 +108,19 @@ class DynamicalModel(object):
             new_dynamical_model = copy_with_new_cache(self)
             new_dynamical_model.hamiltonian = ham
             yield new_dynamical_model
+
+    @property
+    def time_step(self):
+        """
+        The default time step at which to sample the equation of motion (in the
+        rotating frame)
+        """
+        return self.hamiltonian.time_step / self.unit_convert
+
+    def hilbert_subspace_index(self, subspace):
+        return hilbert_subspace_index(subspace, self.hilbert_subspace,
+                                        self.hamiltonian.n_sites,
+                                        self.hamiltonian.n_vibrational_states)
 
 
 class SystemOperator(object):
@@ -127,7 +153,7 @@ class SystemOperator(object):
     @abstractmethod
     def right_multiply(self, state):
         """
-        Returns the left multiplication of the system-field operator with the
+        Returns the right multiplication of the system-field operator with the
         given state
         """
 

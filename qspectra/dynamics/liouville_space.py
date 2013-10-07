@@ -1,4 +1,3 @@
-from abc import abstractproperty
 import itertools
 import numpy as np
 
@@ -7,8 +6,8 @@ from ..operator_tools import SubspaceError, n_excitations
 from ..utils import memoized_property
 
 
-def liouville_subspace_indices(liouville_subspace, full_subspace, n_sites,
-                               n_vibrational_states=1):
+def liouville_subspace_index(liouville_subspace, full_subspace, n_sites,
+                             n_vibrational_states=1):
     """
     Returns indices of the full vectorized density operator in the given
     subspace that are included in the indicated liouville subspace
@@ -132,95 +131,6 @@ def super_right_matrix(operator):
     return np.kron(operator.T, I)
 
 
-class LiouvilleSpaceModel(DynamicalModel):
-    def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
-                 unit_convert=1):
-        """
-        DynamicalModel for Liouville space
-
-        The equation_of_motion method needs to be defined by a subclass
-
-        Parameters
-        ----------
-        hamiltonian : hamiltonian.Hamiltonian
-            Hamiltonian object specifying the system
-        rw_freq : float, optional
-            Rotating wave frequency at which to calculate dynamics. By default,
-            the rotating wave frequency is chosen from the central frequency
-            of the Hamiltonian.
-        hilbert_subspace : container, default 'ge'
-            Container of any or all of 'g', 'e' and 'f' indicating the desired
-            Hilbert subspace on which to calculate the Redfield tensor.
-        unit_convert : number, optional
-            Unit conversion from energy to time units (default 1).
-
-        References
-        ----------
-        Nitzan (2006)
-        """
-        self.hamiltonian = hamiltonian.in_rotating_frame(rw_freq)
-        self.rw_freq = self.hamiltonian.energy_offset
-        self.hilbert_subspace = hilbert_subspace
-        self.unit_convert = unit_convert
-
-    def _liouville_subspace_indices(self, liouville_subspace, subspace=None):
-        if subspace is None:
-            subspace = self.hilbert_subspace
-        return liouville_subspace_indices(liouville_subspace, subspace,
-                                          self.hamiltonian.n_sites,
-                                          self.hamiltonian.n_vibrational_states)
-
-    def ground_state(self, liouville_subspace):
-        rho0 = self.hamiltonian.ground_state(self.hilbert_subspace)
-        index = self._liouville_subspace_indices(liouville_subspace)
-        return matrix_to_ket_vec(rho0)[index]
-
-    @abstractproperty
-    def evolution_super_operator(self):
-        pass
-
-    def equation_of_motion(self, liouville_subspace, heisenberg_picture=False):
-        """
-        Return the equation of motion for this dynamical model in the given
-        subspace, a function which takes a state vector and returns its first
-        time derivative, for use in a numerical integration routine
-        """
-        index = self._liouville_subspace_indices(liouville_subspace)
-        mesh = np.ix_(index, index)
-        evolve_matrix = self.evolution_super_operator[mesh]
-        if heisenberg_picture:
-            # This works because these two equations of motion are equivalent:
-            #     rho.reshape(-1, 1).dot(L)
-            # and:
-            #     L.T.dot(rho)
-            evolve_matrix = evolve_matrix.T
-        def eom(t, rho):
-            return evolve_matrix.dot(rho)
-        return eom
-
-    def map_between_subspaces(self, state, from_subspace, to_subspace):
-        from_indices, to_indices = map(self._liouville_subspace_indices,
-                                       [from_subspace, to_subspace])
-        N = self.hamiltonian.n_states(self.hilbert_subspace)
-        new_state = matrix_to_ket_vec(np.zeros((N, N), dtype=complex))
-        new_state[from_indices] = state
-        return new_state[to_indices]
-
-    @property
-    def time_step(self):
-        """
-        The default time step at which to sample the equation of motion (in the
-        rotating frame)
-        """
-        return self.hamiltonian.time_step / self.unit_convert
-
-    def dipole_operator(self, liouv_subspace_map, polarization,
-                        transitions='-+'):
-        operator = self.hamiltonian.dipole_operator(self.hilbert_subspace,
-                                                    polarization, transitions)
-        return LiouvilleSpaceOperator(operator, liouv_subspace_map, self)
-
-
 class LiouvilleSpaceOperator(SystemOperator):
     def __init__(self, operator, liouv_subspace_map, dynamical_model):
         """
@@ -236,14 +146,14 @@ class LiouvilleSpaceOperator(SystemOperator):
             form 'eg,fe'), in which case the super operator is assumed to map
             from and to the same subspace.
         dynamical_model : LiouvilleSpaceModel
-            LiouvilleSpaceModel on which this operator acts.
+            The dynamical model on which this operator acts.
         """
         self.operator = operator
         liouv_subspaces = (liouv_subspace_map.split('->')
                            if '->' in liouv_subspace_map
                            else [liouv_subspace_map, liouv_subspace_map])
         self.from_indices, self.to_indices = \
-            map(dynamical_model._liouville_subspace_indices, liouv_subspaces)
+            map(dynamical_model.liouville_subspace_index, liouv_subspaces)
         self.super_op_mesh = np.ix_(self.to_indices, self.from_indices)
 
     @property
@@ -280,3 +190,54 @@ class LiouvilleSpaceOperator(SystemOperator):
         # => (tr_M)_j = sum_i vec(I)_i S_ij
         tr = np.identity(len(self.operator)).reshape(-1)[self.to_indices]
         return tr.dot(self._super_left_matrix).dot
+
+
+class LiouvilleSpaceModel(DynamicalModel):
+    """
+    DynamicalModel for Liouville space dynamics
+
+    Subclasses must override the `evolution_super_operator` property or the
+    `equation_of_motion` method.
+    """
+    system_operator = LiouvilleSpaceOperator
+
+    def liouville_subspace_index(self, subspace):
+        return liouville_subspace_index(subspace, self.hilbert_subspace,
+                                        self.hamiltonian.n_sites,
+                                        self.hamiltonian.n_vibrational_states)
+
+    def ground_state(self, liouville_subspace):
+        rho0 = self.hamiltonian.ground_state(self.hilbert_subspace)
+        index = self.liouville_subspace_index(liouville_subspace)
+        return matrix_to_ket_vec(rho0)[index]
+
+    @property
+    def evolution_super_operator(self):
+        pass
+
+    def equation_of_motion(self, liouville_subspace, heisenberg_picture=False):
+        """
+        Return the equation of motion for this dynamical model in the given
+        subspace, a function which takes a state vector and returns its first
+        time derivative, for use in a numerical integration routine
+        """
+        index = self.liouville_subspace_index(liouville_subspace)
+        mesh = np.ix_(index, index)
+        evolve_matrix = self.evolution_super_operator[mesh]
+        if heisenberg_picture:
+            # This works because these two equations of motion are equivalent:
+            #     rho.reshape(-1, 1).dot(L)
+            # and:
+            #     L.T.dot(rho)
+            evolve_matrix = evolve_matrix.T
+        def eom(t, rho):
+            return evolve_matrix.dot(rho)
+        return eom
+
+    def map_between_subspaces(self, state, from_subspace, to_subspace):
+        from_indices, to_indices = map(self.liouville_subspace_index,
+                                       [from_subspace, to_subspace])
+        N = self.hamiltonian.n_states(self.hilbert_subspace)
+        new_state = matrix_to_ket_vec(np.zeros((N, N), dtype=complex))
+        new_state[from_indices] = state
+        return new_state[to_indices]
