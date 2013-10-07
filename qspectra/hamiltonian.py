@@ -3,12 +3,13 @@ from functools import wraps
 import numpy as np
 import scipy.linalg
 
-from constants import GAUSSIAN_SD_FWHM
-from operator_tools import (transition_operator, operator_extend, unit_vec,
-                            tensor, extend_vib_operator, vib_create,
-                            vib_annihilate)
-from polarization import polarization_vector, random_rotation_matrix
-from utils import imemoize, memoized_property, ZeroArray
+from .constants import GAUSSIAN_SD_FWHM
+from .operator_tools import (transition_operator, operator_extend, unit_vec,
+                             tensor, extend_vib_operator, vib_create,
+                             vib_annihilate)
+from .polarization import polarization_vector, random_rotation_matrix
+from .utils import imemoize, memoized_property, ZeroArray
+from .simulate.utils import ProgressBar, ProgressBarDummy
 
 
 class HamiltonianError(Exception):
@@ -447,9 +448,12 @@ def optional_ensemble_average(func):
             random_seed = kwargs.pop('ensemble_random_seed', None)
             random_orientations = kwargs.pop(
                 'ensemble_random_orientations', False)
+            pb = (ProgressBar(ensemble_size)
+                  if kwargs.get('show_progress', True) else ProgressBarDummy())
+            kwargs['show_progress'] = False
             total_signal = ZeroArray()
-            for dyn_model in dynamical_model.sample_ensemble(
-                    ensemble_size, random_orientations, random_seed):
+            for dyn_model in pb(dynamical_model.sample_ensemble(
+                    ensemble_size, random_orientations, random_seed)):
                 (t, signal) = func(dyn_model, *args, **kwargs)
                 total_signal += signal
             total_signal /= ensemble_size
