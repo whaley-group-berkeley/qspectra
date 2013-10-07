@@ -8,24 +8,24 @@ import qspectra.dynamics.liouville_space as liouville_space
 
 
 class TestSubspaces(unittest.TestCase):
-    def test_liouville_subspace_indices(self):
+    def test_liouville_subspace_index(self):
         assert_equal(
-            liouville_space.liouville_subspace_indices('eg,ge', 'ge', 2),
+            liouville_space.liouville_subspace_index('eg,ge', 'ge', 2),
             [1, 2, 3, 6])
         assert_equal(
-            liouville_space.liouville_subspace_indices('eg,fe', 'gef', 2),
+            liouville_space.liouville_subspace_index('eg,fe', 'gef', 2),
             [1, 2, 7, 11])
         assert_equal(
-            liouville_space.liouville_subspace_indices('gg,ee,ff', 'gef', 2),
+            liouville_space.liouville_subspace_index('gg,ee,ff', 'gef', 2),
             [0, 5, 6, 9, 10, 15])
         with self.assertRaises(liouville_space.SubspaceError):
-            liouville_space.liouville_subspace_indices('ef', 'ge', 2)
+            liouville_space.liouville_subspace_index('ef', 'ge', 2)
         # test >1 vibrations:
         assert_equal(
-            liouville_space.liouville_subspace_indices('gg', 'ge', 1, 2),
+            liouville_space.liouville_subspace_index('gg', 'ge', 1, 2),
             [0, 1, 4, 5])
         assert_equal(
-            liouville_space.liouville_subspace_indices('eg', 'ge', 1, 2),
+            liouville_space.liouville_subspace_index('eg', 'ge', 1, 2),
             [2, 3, 6, 7])
 
     def test_all_liouville_subspaces(self):
