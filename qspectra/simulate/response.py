@@ -8,14 +8,15 @@ from ..polarization import (optional_2nd_order_isotropic_average,
                             optional_4th_order_isotropic_average)
 from .utils import (integrate, return_fourier_transform,
                     return_real_fourier_transform)
-from ..utils import ZeroArray, ndarray_list
+from ..utils import ZeroArray
 
 
 @optional_ensemble_average
 @optional_2nd_order_isotropic_average
 def linear_response(dynamical_model, liouv_space_path, time_max,
                     initial_state=None, polarization='xx',
-                    heisenberg_picture=True, **integrate_kwargs):
+                    heisenberg_picture=True, show_progress=True,
+                    **integrate_kwargs):
     """
     Evaluate a linear response function under the rotating wave approximation
 
@@ -93,14 +94,14 @@ def linear_response(dynamical_model, liouv_space_path, time_max,
         if heisenberg_picture:
             eom = dynamical_model.equation_of_motion(sim_subspace,
                                                      heisenberg_picture=True)
-            V_Gt3 = integrate(eom, V[1].bra_vector, t,
-                              **integrate_kwargs)
+            V_Gt3 = integrate(eom, -V[1].bra_vector, t,
+                              show_progress=show_progress, **integrate_kwargs)
             signal += np.tensordot(V_Gt3, V_rho2, (-1, -1))
         else:
             eom = dynamical_model.equation_of_motion(sim_subspace)
             signal -= integrate(eom, V_rho2, t,
                                 save_func=V[1].expectation_value,
-                                **integrate_kwargs)
+                                show_progress=show_progress, **integrate_kwargs)
     return (t, signal)
 
 
@@ -108,7 +109,8 @@ def linear_response(dynamical_model, liouv_space_path, time_max,
 @optional_ensemble_average
 @optional_2nd_order_isotropic_average
 def absorption_spectra(dynamical_model, time_max, correlation_decay_time=None,
-                       polarization='xx', exact_isotropic_average=False,
+                       polarization='xx', heisenberg_picture=True,
+                       show_progress=True, exact_isotropic_average=False,
                        **integrate_kwargs):
     """
     Returns the absorption spectra of a dynamical model
@@ -152,6 +154,8 @@ def absorption_spectra(dynamical_model, time_max, correlation_decay_time=None,
     """
     (t, x) = linear_response(dynamical_model, 'gg->eg->gg', time_max,
                              polarization=polarization,
+                             show_progress=show_progress,
+                             heisenberg_picture=heisenberg_picture,
                              exact_isotropic_average=exact_isotropic_average,
                              **integrate_kwargs)
     if correlation_decay_time is not None:
@@ -169,7 +173,8 @@ PUMP_PROBE_PATHWAYS = {'GSB': 'gg->eg->gg',
 @optional_2nd_order_isotropic_average
 def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
                     initial_liouv_subspace='gg,ge,eg,ee',
-                    include_signal='GSB,ESE,ESA', **integrate_kwargs):
+                    include_signal='GSB,ESE,ESA', heisenberg_picture=True,
+                    show_progress=True, **integrate_kwargs):
     """
     Probe the 2nd order portion of the provided state with an impulsive probe
     pulse under the rotating wave approximation
@@ -229,7 +234,8 @@ def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
                                                      initial_state)
             (t, signal) = linear_response(dynamical_model, liouv_space_path,
                                           time_max, init_state_portion,
-                                          polarization, **integrate_kwargs)
+                                          polarization, heisenberg_picture,
+                                          show_progress, **integrate_kwargs)
             total_signal += signal
     if isinstance(total_signal, ZeroArray):
         raise ValueError('include_signal must include at least one of '
@@ -263,7 +269,7 @@ def third_order_response(dynamical_model, coherence_time_max,
                          population_time_max=None, population_times=None,
                          geometry='-++', polarization='xxxx',
                          include_signal=None, heisenberg_picture_t3=True,
-                         **integrate_kwargs):
+                         show_progress=True, **integrate_kwargs):
     """
     Evaluate a third order response function in the rotating wave approximation
 
@@ -279,8 +285,8 @@ def third_order_response(dynamical_model, coherence_time_max,
         Maximum time for which to simulate dynamics between the second and third
         interactions.
     population_times : number, optional
-        Explicit times at which to simulate dynamics between the second and third
-        interactions. If provided, overrides population_time_max.
+        Explicit times at which to simulate dynamics between the second and
+        third interactions. If provided, overrides population_time_max.
     geometry : '-++' (default), '+-+' or '++-'
         String of '+' or '-' terms indicating whether to simulate the so-called
         photon-echo signal $-k_1 + k_2 + k_3$ ('-++'), the non-rephasing signal
@@ -385,18 +391,14 @@ def third_order_response(dynamical_model, coherence_time_max,
                 eom_heisen = dynamical_model.equation_of_motion(
                     subspaces[3], heisenberg_picture=True)
                 V_Gt3 = integrate(eom_heisen, V[3].bra_vector, t3,
+                                  show_progress=show_progress,
                                   **integrate_kwargs)
                 total_signal += np.einsum('ci,abi', V_Gt3, V_rho2)
             else:
-                total_signal += ndarray_list(
-                                    (ndarray_list(
-                                        (integrate(eom[2], init_inner, t3,
-                                                   save_func=V[3].expectation_value,
-                                                   **integrate_kwargs)
-                                         for init_inner in init_outer),
-                                        len(init_outer))
-                                     for init_outer in V_rho2),
-                                    len(V_rho2))
+                total_signal += integrate(eom[2], V_rho2, t3,
+                                          save_func=V[3].expectation_value,
+                                          show_progress=show_progress,
+                                          **integrate_kwargs)
     if isinstance(total_signal, ZeroArray):
         if geometry == '++-':
             raise ValueError('include_signal must include at least one of '
