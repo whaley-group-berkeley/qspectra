@@ -1,5 +1,6 @@
 from functools import wraps
 from numpy import pi
+import inspect
 import numpy as np
 import scipy.integrate
 
@@ -30,15 +31,31 @@ except ImportError:
     ProgressBar = ProgressBarDummy
 
 
+def extract_progress_bar(func, kwargs):
+    """
+    Given a function being called with `kwargs`, create a progress bar object
+    if `show_progress` in `kwargs` is True.
+    """
+    if ('show_progress' in inspect.getargspec(func)
+            and kwargs.get('show_progress', True)):
+        pb = ProgressBar()
+        kwargs['show_progress'] = False
+    else:
+        pb = ProgressBarDummy()
+    return pb, kwargs
+
+
 class IntegratorError(Exception):
     pass
 
 
-def _integrate(f, y0, t, method_name, f_params, save_func, show_progress,
+def _integrate(f, y0, t, t0, method_name, f_params, save_func, show_progress,
                **kwargs):
+    if t0 is None:
+        t0 = t[0]
     solver = scipy.integrate.ode(f)
     solver.set_integrator(method_name, **kwargs)
-    solver.set_initial_value(y0, t[0])
+    solver.set_initial_value(y0, t0)
     if f_params is not None:
         solver.set_f_params(**f_params)
 
@@ -48,26 +65,31 @@ def _integrate(f, y0, t, method_name, f_params, save_func, show_progress,
     try:
         save_shape = list(y0_saved.shape)
     except AttributeError:
-        # y0_saved is just a number
+        # in this case, y0_saved is just a number
         save_shape = []
     y = np.empty([len(t)] + save_shape, dtype=y0_saved.dtype)
 
     progress_bar = ProgressBar() if show_progress else ProgressBarDummy()
-    progress_bar.maxval = t[-1] - t[0]
+    progress_bar.maxval = t[-1] - t0
     progress_bar.start()
-    y[0] = y0_saved
-    for i in xrange(1, len(t)):
+    if t[0] == t0:
+        # integrate.ode does not like being asked for the initial time
+        y[0] = y0_saved
+        i0 = 1
+    else:
+        i0 = 0
+    for i in xrange(i0, len(t)):
         if solver.successful():
             y[i] = save_func(solver.integrate(t[i]))
-            progress_bar.update(t[i] - t[0])
+            progress_bar.update(t[i] - t0)
         else:
             raise IntegratorError('integration failed at time {}'.format(t[i]))
     progress_bar.finish()
     return y
 
 
-def integrate(f, y0, t, method_name='zvode', f_params=None, save_func=None,
-              show_progress=False, **kwargs):
+def integrate(f, y0, t, t0=None, method_name='zvode', f_params=None,
+              save_func=None, show_progress=False, **kwargs):
     """
     Functional interface to solvers from scipy.integrate.ode, providing
     syntax resembling scipy.integrate.odeint to solve the first-order
@@ -85,14 +107,15 @@ def integrate(f, y0, t, method_name='zvode', f_params=None, save_func=None,
     f : function
         Funtion to integrate. Should take arguments like f(t, y, **f_params).
     y0 : np.ndarray
-        Initial values.
+        Initial value at time t0.
     t : np.ndarray
-        Times at which to return the calculate state of the system. The system
-        is assumed to be in the state y0 at time t[0].
+        Times at which to return the state of the system.
+    t0 : float, optional
+        Time at which to start the integration. Defaults to t[0].
     method_name : string, optional
         Method name to pass to scipy.integrate.ode (default 'zvode').
     f_params : dict, optional
-        Additional parameters to call f with.
+        Additional parameters to pass to `f`.
     save_func : function, optional
         Function to call on a state y to select the desired return values. By
         default, the entire state vector is returned.
@@ -107,17 +130,27 @@ def integrate(f, y0, t, method_name='zvode', f_params=None, save_func=None,
         integrator at all given times t.
     """
     if len(y0.shape) == 1:
-        return _integrate(f, y0, t, method_name, f_params, save_func,
+        return _integrate(f, y0, t, t0, method_name, f_params, save_func,
                           show_progress, **kwargs)
     else:
         # use progress_bar only for the outer-most loop
         progress_bar = ProgressBar() if show_progress else ProgressBarDummy()
-        return ndarray_list((integrate(f, y0i, t, method_name, f_params,
+        return ndarray_list((integrate(f, y0i, t, t0, method_name, f_params,
                                        save_func, False, **kwargs)
                              for y0i in progress_bar(y0)), len(y0))
 
 
-def fourier_transform(t, x, axis=0, rw_freq=0, unit_convert=1, freq_bounds=None,
+def slice_along_axis(start=None, stop=None, step=None, axis=0, ndim=1):
+    """
+    Returns an N-dimensional slice along only the specified axis
+    """
+    return tuple(slice(start, stop, step)
+                 if (n == axis) or (n == ndim + axis)
+                 else slice(None)
+                 for n in xrange(ndim))
+
+
+def fourier_transform(t, x, axis=-1, rw_freq=0, unit_convert=1,
                       reverse_freq=False, positive_time_only=True):
     """
     Fourier transform a signal defined in a rotating frame using FFT
@@ -132,44 +165,69 @@ def fourier_transform(t, x, axis=0, rw_freq=0, unit_convert=1, freq_bounds=None,
     x : np.ndarray
         Signal to Fourier transform.
     axes : int, optional
-        Axis along which to apply the Fourier transform (default 0).
+        Axis along which to apply the Fourier transform (defaults to -1).
     rw_freq : number, optional
         Frequency of the rotating frame in which the signal is sampled.
     unit_convert : number, optional
         Unit conversion from frequency to time units (default 1).
-    freq_bounds : list of 2 numbers, optional
-        Bounds giving the minimum and maximum frequencies at which to return
-        the transformed signal.
     reverse_freq : boolean, optional
         Switch the exponential from +\omega to -\omega.
     positive_time_only : boolean, optional
         If True (default), the signal is assumed to only be defined for at
         positive times, and the signal is zero-padded on the left with len(x)
         zeros before passing it to the FFT routine.
+
+    Returns
+    -------
+    f : np.ndarray
+        Frequencies at which the Fourier transformed signal is defined.
+    X : np.ndarray
+        The Fourier transformed signal.
     """
-    if positive_time_only:
-        x_all = np.concatenate([np.zeros_like(x), x], axis=axis)
-    else:
-        x_all = x
+    x_all = (np.concatenate([np.zeros_like(x), x], axis=axis)
+             if positive_time_only else x)
     x_shifted = np.fft.fftshift(x_all, axes=axis)
 
     X = np.fft.fftshift(np.fft.fft(x_shifted, axis=axis), axes=axis)
     dt = t[1] - t[0]
 
-    rev = 1 if reverse_freq else -1
-
     fft_freqs = np.fft.fftfreq(x_all.shape[axis], dt * unit_convert / (2 * pi))
+    rev = 1 if reverse_freq else -1
     freqs = rev * np.fft.fftshift(fft_freqs) + rw_freq
 
-    if freq_bounds is not None:
-        i0 = np.argmin(np.abs(freqs - freq_bounds[0]))
-        i1 = np.argmin(np.abs(freqs - freq_bounds[1]))
-        X = X[min(i0, i1):(max(i0, i1) + 1)]
-        freqs = freqs[min(i0, i1):(max(i0, i1) + 1)]
+    nd_index = slice_along_axis(step=rev, axis=axis, ndim=len(X.shape))
+    return freqs[::rev], X[nd_index]
 
-    index = tuple(slice(None, None, rev) if n == axis else slice(None)
-                  for n in xrange(len(x.shape)))
-    return freqs[::rev], X[index]
+
+def bound_signal(ticks, signal, bounds, axis=0):
+    """
+    Bound a signal by tick values along a given axis
+
+    Parameters
+    ----------
+    ticks : np.ndarray
+        1D array giving the tick marks for the signal
+    signal : np.ndarray
+        ND array giving the signal to bound
+    bounds : list of 2 numbers
+        Bounds giving the minimum and maximum ticks at which to return the
+        signal
+    axis : int, default 0
+        Axis along which to bound signal
+
+    Returns
+    -------
+    ticks : np.ndarray
+        Bounded ticks
+    signal : np.ndarray
+        Bounded signal
+    """
+    if signal.shape[axis] != len(ticks):
+        raise ValueError('ticks must have same shape as signal along given '
+                         'axis')
+    i0, i1 = sorted(np.argmin(np.abs(ticks - bound)) for bound in bounds)
+    nd_index = slice_along_axis(i0, i1 + 1, None, axis, len(signal.shape))
+    return ticks[i0:(i1 + 1)], signal[nd_index]
 
 
 def return_fourier_transform(func):

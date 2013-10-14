@@ -8,8 +8,8 @@ from .operator_tools import (transition_operator, operator_extend, unit_vec,
                              tensor, extend_vib_operator, vib_create,
                              vib_annihilate)
 from .polarization import polarization_vector, random_rotation_matrix
+from .simulate.utils import extract_progress_bar
 from .utils import imemoize, memoized_property, ZeroArray
-from .simulate.utils import ProgressBar, ProgressBarDummy
 
 
 class HamiltonianError(Exception):
@@ -138,7 +138,7 @@ class ElectronicHamiltonian(Hamiltonian):
     energy_spread_extra : float, optional (default 100)
         Default extra frequency to add to the spread of energies when
         determining the frequency step size automatically.
-    ref_system : VibronicHamiltonian, optional
+    ref_system : ElectronicHamiltonian, optional
         A reference to another Hamiltonian from which to retrieve the
         `freq_step` and `time_step` properties. Included so that sampling and
         rotating frame frequencies are stable under the `sample_ensemble`
@@ -146,11 +146,11 @@ class ElectronicHamiltonian(Hamiltonian):
     """
     def __init__(self, H_1exc, energy_offset=0, disorder_fwhm=0, bath=None,
                  dipoles=None, energy_spread_extra=100.0, ref_system=None):
-        self.H_1exc = np.asanyarray(H_1exc)
+        self.H_1exc = np.asarray(H_1exc)
         self.energy_offset = energy_offset
         self.disorder_fwhm = disorder_fwhm
         self.bath = bath
-        self.dipoles = np.asanyarray(dipoles) if dipoles is not None else None
+        self.dipoles = np.asarray(dipoles) if dipoles is not None else None
         self.energy_spread_extra = energy_spread_extra
         self.n_vibrational_states = 1
         super(ElectronicHamiltonian, self).__init__(ref_system)
@@ -305,9 +305,9 @@ class VibronicHamiltonian(Hamiltonian):
         self.energy_spread_extra = self.electronic.energy_spread_extra
         self.bath = self.electronic.bath
         self.n_sites = self.electronic.n_sites
-        self.n_vibrational_levels = np.asanyarray(n_vibrational_levels)
-        self.vib_energies = np.asanyarray(vib_energies)
-        self.elec_vib_couplings = np.asanyarray(elec_vib_couplings)
+        self.n_vibrational_levels = np.asarray(n_vibrational_levels)
+        self.vib_energies = np.asarray(vib_energies)
+        self.elec_vib_couplings = np.asarray(elec_vib_couplings)
         super(VibronicHamiltonian, self).__init__(ref_system)
 
     @memoized_property
@@ -448,9 +448,7 @@ def optional_ensemble_average(func):
             random_seed = kwargs.pop('ensemble_random_seed', None)
             random_orientations = kwargs.pop(
                 'ensemble_random_orientations', False)
-            pb = (ProgressBar(ensemble_size)
-                  if kwargs.get('show_progress', True) else ProgressBarDummy())
-            kwargs['show_progress'] = False
+            pb, kwargs = extract_progress_bar(func, kwargs)
             total_signal = ZeroArray()
             for dyn_model in pb(dynamical_model.sample_ensemble(
                     ensemble_size, random_orientations, random_seed)):

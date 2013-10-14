@@ -49,6 +49,9 @@ def linear_response(dynamical_model, liouv_space_path, time_max,
         option. If there are multiple initial values, simulating in the
         Heisenberg picture is much faster, since only one integration needs to
         be performed along the time axis. See Ref. [1] for more details.
+    show_progress : bool, optional
+        Whether or not to show a progress bar when running this function
+        (requires the `progressbar` module to be installed).
     ensemble_size : int, optional
         If provided, perform an ensemble average of this signal over Hamiltonian
         disorder, as determined by the `sample_ensemble` method of the provided
@@ -91,14 +94,13 @@ def linear_response(dynamical_model, liouv_space_path, time_max,
              for sub_start, sub_end, polar, trans
              in zip(subspaces[:-1], subspaces[1:], polarization, '+-')]
         V_rho2 = np.apply_along_axis(V[0].commutator, -1, initial_state)
+        eom = dynamical_model.equation_of_motion(sim_subspace,
+                                                 heisenberg_picture)
         if heisenberg_picture:
-            eom = dynamical_model.equation_of_motion(sim_subspace,
-                                                     heisenberg_picture=True)
             V_Gt3 = integrate(eom, -V[1].bra_vector, t,
                               show_progress=show_progress, **integrate_kwargs)
-            signal += np.tensordot(V_Gt3, V_rho2, (-1, -1))
+            signal += np.tensordot(V_rho2, V_Gt3, (-1, -1))
         else:
-            eom = dynamical_model.equation_of_motion(sim_subspace)
             signal -= integrate(eom, V_rho2, t,
                                 save_func=V[1].expectation_value,
                                 show_progress=show_progress, **integrate_kwargs)
@@ -129,6 +131,16 @@ def absorption_spectra(dynamical_model, time_max, correlation_decay_time=None,
     polarization : iterable, default 'xx'
         Two item iterable giving the polarization of the last two system-field
         interactions as strings or 3D arrays
+    heisenberg_picture : boolean, default True
+        Whether or not to simulate in the Heisenberg picture (instead of the
+        Schroedinger picture). This option requires that the equation of motion
+        for the chosen dynamical model also supports a heisenberg_picture
+        option. If there are multiple initial values, simulating in the
+        Heisenberg picture is much faster, since only one integration needs to
+        be performed along the time axis. See Ref. [1] for more details.
+    show_progress : bool, optional
+        Whether or not to show a progress bar when running this function
+        (requires the `progressbar` module to be installed).
     ensemble_size : int, optional
         If provided, perform an ensemble average of this signal over Hamiltonian
         disorder, as determined by the `sample_ensemble` method of the provided
@@ -200,6 +212,16 @@ def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
         Indicates whether to include the ground-state-bleach (GSB), excited-
         state-emission (ESE) and excited-state-absorption (ESA) contributions
         to the signal.
+    heisenberg_picture : boolean, default True
+        Whether or not to simulate in the Heisenberg picture (instead of the
+        Schroedinger picture). This option requires that the equation of motion
+        for the chosen dynamical model also supports a heisenberg_picture
+        option. If there are multiple initial values, simulating in the
+        Heisenberg picture is much faster, since only one integration needs to
+        be performed along the time axis. See Ref. [1] for more details.
+    show_progress : bool, optional
+        Whether or not to show a progress bar when running this function
+        (requires the `progressbar` module to be installed).
     ensemble_size : int, optional
         If provided, perform an ensemble average of this signal over Hamiltonian
         disorder, as determined by the `sample_ensemble` method of the provided
@@ -384,7 +406,7 @@ def third_order_response(dynamical_model, coherence_time_max,
             V_rho1 = integrate(eom[0], V_rho0, t1,
                                save_func=V[1].commutator,
                                 **integrate_kwargs)
-            V_rho2 = integrate(eom[1], V_rho1, t2,
+            V_rho2 = integrate(eom[1], V_rho1, t2, t0=0,
                                save_func=V[2].commutator,
                                **integrate_kwargs)
             if heisenberg_picture_t3:
