@@ -22,7 +22,9 @@ class Bath(object):
     #     J = self.spectral_density_func
     #     J0 = self.spectral_density_limit_at_zero
 
+    #  should use np.exp1m instead?
     #     def n(x):
+    #         return 1 / np.exp1m(-x / T)
     #         return 1 / (exp(x / T) - 1)
 
     #     def J_anti(x):

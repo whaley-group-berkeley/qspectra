@@ -53,7 +53,11 @@ def _integrate(f, y0, t, t0, method_name, f_params, save_func, show_progress,
                **kwargs):
     if t0 is None:
         t0 = t[0]
-    solver = scipy.integrate.ode(f)
+    if method_name == 'zvode':
+        # this is the method to ode that supports complex values 
+        solver = scipy.integrate.ode(f)
+    else:
+        solver = scipy.integrate.complex_ode(f)
     solver.set_integrator(method_name, **kwargs)
     solver.set_initial_value(y0, t0)
     if f_params is not None:
@@ -113,7 +117,8 @@ def integrate(f, y0, t, t0=None, method_name='zvode', f_params=None,
     t0 : float, optional
         Time at which to start the integration. Defaults to t[0].
     method_name : string, optional
-        Method name to pass to scipy.integrate.ode (default 'zvode').
+        Method name to pass to scipy.integrate.ode (default 'zvode'). If
+        method_name is not 'zvode', scipy.integrate.complex_ode is used instead.
     f_params : dict, optional
         Additional parameters to pass to `f`.
     save_func : function, optional
