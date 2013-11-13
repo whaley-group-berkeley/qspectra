@@ -45,7 +45,7 @@ class ZOFEModel(DynamicalModel):
     system_operator = ZOFESpaceOperator
 
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
-                 unit_convert=1):
+                 unit_convert=1, ham_hermit=False, rho_hermit=False):
         """
         DynamicalModel for ZOFE master equation
 
@@ -82,6 +82,9 @@ class ZOFEModel(DynamicalModel):
         n_stat = self.hamiltonian.n_states(self.hilbert_subspace)
         self.oop_shape = (numb_pm, n_sit, n_stat, n_stat)
 
+        self.ham_hermit = ham_hermit
+        self.rho_hermit = rho_hermit
+
     def initial_state_and_oop_vec(self, initial_rho_vec):
         # initial auxiliary operator for the ZOFE master equation
         initial_oop = np.zeros(self.oop_shape, dtype=complex)
@@ -107,8 +110,7 @@ class ZOFEModel(DynamicalModel):
         return np.append(rho.reshape((-1), order='F'),
                          oop.reshape((-1), order='F'))
 
-    def rhodot_oopdot_vec(self, t, rho_oop_vec, oop_shape, ham, L_n, Gamma,
-                          w, ham_hermit=False, rho_hermit=False):
+    def rhodot_oopdot_vec(self, t, rho_oop_vec, oop_shape, ham, L_n, Gamma, w):
         """
         Calculates the time derivatives rhodot and oopdot,
         i.e., of the density matrix and the auxiliary operator
@@ -166,17 +168,17 @@ class ZOFEModel(DynamicalModel):
                             sum_oop.swapaxes(1,2).conj(), axes=([0, 2], [0, 1]))
         d_op = np.dot(b_op, rho) + c_op
 
-        if not rho_hermit:
+        if not self.rho_hermit:
             big_operator = np.tensordot(np.tensordot(sum_oop, rho,
                                                      axes=([2], [0])),
                                         L_n.swapaxes(1, 2).conj(),
                                         axes=([0, 2], [0, 1]))
-            if ham_hermit:
+            if self.ham_hermit:
                 f_op = rho.dot(b_op.T.conj()) + big_operator
             else:
                 f_op = rho.dot(1j * ham - a_op.T.conj()) + big_operator
         else:
-            if ham_hermit:
+            if self.ham_hermit:
                 f_op = d_op.T.conj()
             else:
                 f_op = rho.dot(1j * ham - a_op.T.conj()) + c_op.T.conj()

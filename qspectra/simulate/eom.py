@@ -12,7 +12,7 @@ from .utils import integrate
 @optional_ensemble_average
 def simulate_dynamics(dynamical_model, initial_state, duration=None, times=None,
                       liouville_subspace='ee', save_func=None,
-                      show_progress=True, **integrate_kwargs):
+                      **integrate_kwargs):
     """
     Simulate time evolution with no applied field
 
@@ -33,9 +33,6 @@ def simulate_dynamics(dynamical_model, initial_state, duration=None, times=None,
         subspace.
     save_func : function, optional
         Optional function to apply to the state vector before returning it.
-    show_progress : bool, optional
-        Whether or not to show a progress bar when running this function
-        (requires the `progressbar` module to be installed).
     ensemble_size : int, optional
         If provided, perform an ensemble average of this signal over Hamiltonian
         disorder, as determined by the `sample_ensemble` method of the provided
@@ -57,14 +54,14 @@ def simulate_dynamics(dynamical_model, initial_state, duration=None, times=None,
     t = (np.arange(0, duration, dynamical_model.time_step)
          if times is None else times)
     states = integrate(eom, initial_state, t, save_func=save_func,
-                       show_progress=show_progress, **integrate_kwargs)
+                       **integrate_kwargs)
     return (t, states)
 
 
 def _simulate_with_fields(dynamical_model, pulses, geometry='-+',
                           polarization='xx', time_extra=0, times=None,
                           liouville_subspace='gg,ge,eg,ee', save_func=None,
-                          show_progress=True, **integrate_kwargs):
+                          **integrate_kwargs):
     """
     Simulate time evolution under a series of pulses in the rotating wave
     approximation
@@ -97,9 +94,6 @@ def _simulate_with_fields(dynamical_model, pulses, geometry='-+',
         fields.
     save_func : function, optional
         Optional function to apply to the state vector before returning it.
-    show_progress : bool, optional
-        Whether or not to show a progress bar when running this function
-        (requires the `progressbar` module to be installed).
     ensemble_size : int, optional
         If provided, perform an ensemble average of this signal over Hamiltonian
         disorder, as determined by the `sample_ensemble` method of the provided
@@ -139,7 +133,7 @@ def _simulate_with_fields(dynamical_model, pulses, geometry='-+',
          if times is None else tf + times)
 
     states = integrate(f, initial_state, t, t0=t0, save_func=save_func,
-                       show_progress=show_progress, **integrate_kwargs)
+                       **integrate_kwargs)
     return (t, states)
 
 
@@ -152,8 +146,7 @@ simulate_with_fields = optional_ensemble_average(_simulate_with_fields)
 @optional_ensemble_average
 def simulate_pump(dynamical_model, pump, polarization='x', time_extra=0,
                   times=None, liouville_subspace='gg,ge,eg,ee', save_func=None,
-                  show_progress=True, exact_isotropic_average=False,
-                  **integrate_kwargs):
+                  exact_isotropic_average=False, **integrate_kwargs):
     """
     Simulate time evolution under a pump field in the rotating wave
     approximation
@@ -182,9 +175,6 @@ def simulate_pump(dynamical_model, pump, polarization='x', time_extra=0,
         fields.
     save_func : function, optional
         Optional function to apply to the state vector before returning it.
-    show_progress : bool, optional
-        Whether or not to show a progress bar when running this function
-        (requires the `progressbar` module to be installed).
     ensemble_size : int, optional
         If provided, perform an ensemble average of this signal over Hamiltonian
         disorder, as determined by the `sample_ensemble` method of the provided
@@ -211,5 +201,5 @@ def simulate_pump(dynamical_model, pump, polarization='x', time_extra=0,
     return optional_2nd_order_isotropic_average(_simulate_with_fields)(
                 dynamical_model, [pump, pump], '-+', [polarization,
                 polarization], time_extra, times, liouville_subspace, save_func,
-                show_progress, exact_isotropic_average=exact_isotropic_average,
+                exact_isotropic_average=exact_isotropic_average,
                 **integrate_kwargs)

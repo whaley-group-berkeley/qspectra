@@ -1,6 +1,5 @@
 from functools import wraps
 from numpy import pi
-import inspect
 import numpy as np
 import scipy.integrate
 
@@ -8,49 +7,11 @@ import scipy.integrate
 from ..utils import ndarray_list
 
 
-class ProgressBarDummy(object):
-    """
-    Place holder for ProgressBar from the progressbar package
-    """
-    def __init__(self, *args, **kwargs):
-        pass
-    def __call__(self, iterable):
-        return iterable
-    def start(self):
-        return self
-    def update(self, value=None):
-        pass
-    def finish(self):
-        pass
-
-
-try:
-    from progressbar import ProgressBar, Percentage, Bar, ETA
-    ProgressBar._DEFAULT_WIDGETS = [Percentage(), ' ', Bar(), ' ', ETA()]
-except ImportError:
-    ProgressBar = ProgressBarDummy
-
-
-def extract_progress_bar(func, kwargs):
-    """
-    Given a function being called with `kwargs`, create a progress bar object
-    if `show_progress` in `kwargs` is True.
-    """
-    if ('show_progress' in inspect.getargspec(func)
-            and kwargs.get('show_progress', True)):
-        pb = ProgressBar()
-        kwargs['show_progress'] = False
-    else:
-        pb = ProgressBarDummy()
-    return pb, kwargs
-
-
 class IntegratorError(Exception):
     pass
 
 
-def _integrate(f, y0, t, t0, method_name, f_params, save_func, show_progress,
-               **kwargs):
+def _integrate(f, y0, t, t0, method_name, f_params, save_func, **kwargs):
     if t0 is None:
         t0 = t[0]
     if method_name == 'zvode':
@@ -73,9 +34,6 @@ def _integrate(f, y0, t, t0, method_name, f_params, save_func, show_progress,
         save_shape = []
     y = np.empty([len(t)] + save_shape, dtype=y0_saved.dtype)
 
-    progress_bar = ProgressBar() if show_progress else ProgressBarDummy()
-    progress_bar.maxval = t[-1] - t0
-    progress_bar.start()
     if t[0] == t0:
         # integrate.ode does not like being asked for the initial time
         y[0] = y0_saved
@@ -85,15 +43,13 @@ def _integrate(f, y0, t, t0, method_name, f_params, save_func, show_progress,
     for i in xrange(i0, len(t)):
         if solver.successful():
             y[i] = save_func(solver.integrate(t[i]))
-            progress_bar.update(t[i] - t0)
         else:
             raise IntegratorError('integration failed at time {}'.format(t[i]))
-    progress_bar.finish()
     return y
 
 
 def integrate(f, y0, t, t0=None, method_name='zvode', f_params=None,
-              save_func=None, show_progress=False, **kwargs):
+              save_func=None, **kwargs):
     """
     Functional interface to solvers from scipy.integrate.ode, providing
     syntax resembling scipy.integrate.odeint to solve the first-order
@@ -136,13 +92,11 @@ def integrate(f, y0, t, t0=None, method_name='zvode', f_params=None,
     """
     if len(y0.shape) == 1:
         return _integrate(f, y0, t, t0, method_name, f_params, save_func,
-                          show_progress, **kwargs)
+                          **kwargs)
     else:
-        # use progress_bar only for the outer-most loop
-        progress_bar = ProgressBar() if show_progress else ProgressBarDummy()
         return ndarray_list((integrate(f, y0i, t, t0, method_name, f_params,
-                                       save_func, False, **kwargs)
-                             for y0i in progress_bar(y0)), len(y0))
+                                       save_func, **kwargs)
+                             for y0i in y0), len(y0))
 
 
 def slice_along_axis(start=None, stop=None, step=None, axis=0, ndim=1):

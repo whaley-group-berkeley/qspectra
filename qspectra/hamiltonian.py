@@ -8,7 +8,6 @@ from .operator_tools import (transition_operator, operator_extend, unit_vec,
                              tensor, extend_vib_operator, vib_create,
                              vib_annihilate)
 from .polarization import polarization_vector, random_rotation_matrix
-from .simulate.utils import extract_progress_bar
 from .utils import imemoize, memoized_property, ZeroArray
 
 
@@ -448,10 +447,9 @@ def optional_ensemble_average(func):
             random_seed = kwargs.pop('ensemble_random_seed', None)
             random_orientations = kwargs.pop(
                 'ensemble_random_orientations', False)
-            pb, kwargs = extract_progress_bar(func, kwargs)
             total_signal = ZeroArray()
-            for dyn_model in pb(dynamical_model.sample_ensemble(
-                    ensemble_size, random_orientations, random_seed)):
+            for dyn_model in dynamical_model.sample_ensemble(
+                    ensemble_size, random_orientations, random_seed):
                 (t, signal) = func(dyn_model, *args, **kwargs)
                 total_signal += signal
             total_signal /= ensemble_size

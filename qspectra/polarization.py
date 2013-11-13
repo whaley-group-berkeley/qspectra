@@ -6,7 +6,6 @@ import inspect
 import numpy as np
 
 from .utils import ZeroArray
-from .simulate.utils import extract_progress_bar
 
 
 COORD_MAP = {'x': np.array([1, 0, 0]),
@@ -144,9 +143,8 @@ def optional_4th_order_isotropic_average(func):
             kwargs = _get_call_args(func, *args, **kwargs)
             weights = invariant_weights_4th_order(kwargs.pop('polarization'))
             signals = {}
-            pb, kwargs = extract_progress_bar(func, kwargs)
             total_signal = ZeroArray()
-            for invariant, weight in pb(zip(FOURTH_ORDER_INVARIANTS, weights)):
+            for invariant, weight in zip(FOURTH_ORDER_INVARIANTS, weights):
                 if weight > 1e-8:
                     for p in list_polarizations(invariant):
                         if p not in signals:
@@ -176,9 +174,8 @@ def optional_2nd_order_isotropic_average(func):
             kwargs = _get_call_args(func, *args, **kwargs)
             weight = np.dot(*map(polarization_vector,
                                  kwargs.pop('polarization')))
-            progress_bar, kwargs = extract_progress_bar(func, kwargs)
             total_signal = ZeroArray()
-            for p in progress_bar(['xx', 'yy', 'zz']):
+            for p in ['xx', 'yy', 'zz']:
                 (t, signal) = func(polarization=p, **kwargs)
                 total_signal += signal
             total_signal *= weight / 3.0

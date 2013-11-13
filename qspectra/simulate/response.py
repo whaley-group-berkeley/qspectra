@@ -15,8 +15,7 @@ from ..utils import ZeroArray
 @optional_2nd_order_isotropic_average
 def linear_response(dynamical_model, liouv_space_path, time_max,
                     initial_state=None, polarization='xx',
-                    heisenberg_picture=True, show_progress=True,
-                    **integrate_kwargs):
+                    heisenberg_picture=True, **integrate_kwargs):
     """
     Evaluate a linear response function under the rotating wave approximation
 
@@ -49,9 +48,6 @@ def linear_response(dynamical_model, liouv_space_path, time_max,
         option. If there are multiple initial values, simulating in the
         Heisenberg picture is much faster, since only one integration needs to
         be performed along the time axis. See Ref. [1] for more details.
-    show_progress : bool, optional
-        Whether or not to show a progress bar when running this function
-        (requires the `progressbar` module to be installed).
     ensemble_size : int, optional
         If provided, perform an ensemble average of this signal over Hamiltonian
         disorder, as determined by the `sample_ensemble` method of the provided
@@ -97,13 +93,12 @@ def linear_response(dynamical_model, liouv_space_path, time_max,
         eom = dynamical_model.equation_of_motion(sim_subspace,
                                                  heisenberg_picture)
         if heisenberg_picture:
-            V_Gt3 = integrate(eom, -V[1].bra_vector, t,
-                              show_progress=show_progress, **integrate_kwargs)
+            V_Gt3 = integrate(eom, -V[1].bra_vector, t, **integrate_kwargs)
             signal += np.tensordot(V_rho2, V_Gt3, (-1, -1))
         else:
             signal -= integrate(eom, V_rho2, t,
                                 save_func=V[1].expectation_value,
-                                show_progress=show_progress, **integrate_kwargs)
+                                **integrate_kwargs)
     return (t, signal)
 
 
@@ -112,7 +107,7 @@ def linear_response(dynamical_model, liouv_space_path, time_max,
 @optional_2nd_order_isotropic_average
 def absorption_spectra(dynamical_model, time_max, correlation_decay_time=None,
                        polarization='xx', heisenberg_picture=True,
-                       show_progress=True, exact_isotropic_average=False,
+                       exact_isotropic_average=False,
                        **integrate_kwargs):
     """
     Returns the absorption spectra of a dynamical model
@@ -138,9 +133,6 @@ def absorption_spectra(dynamical_model, time_max, correlation_decay_time=None,
         option. If there are multiple initial values, simulating in the
         Heisenberg picture is much faster, since only one integration needs to
         be performed along the time axis. See Ref. [1] for more details.
-    show_progress : bool, optional
-        Whether or not to show a progress bar when running this function
-        (requires the `progressbar` module to be installed).
     ensemble_size : int, optional
         If provided, perform an ensemble average of this signal over Hamiltonian
         disorder, as determined by the `sample_ensemble` method of the provided
@@ -166,7 +158,6 @@ def absorption_spectra(dynamical_model, time_max, correlation_decay_time=None,
     """
     (t, x) = linear_response(dynamical_model, 'gg->eg->gg', time_max,
                              polarization=polarization,
-                             show_progress=show_progress,
                              heisenberg_picture=heisenberg_picture,
                              exact_isotropic_average=exact_isotropic_average,
                              **integrate_kwargs)
@@ -186,7 +177,7 @@ PUMP_PROBE_PATHWAYS = {'GSB': 'gg->eg->gg',
 def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
                     initial_liouv_subspace='gg,ge,eg,ee',
                     include_signal='GSB,ESE,ESA', heisenberg_picture=True,
-                    show_progress=True, **integrate_kwargs):
+                    **integrate_kwargs):
     """
     Probe the 2nd order portion of the provided state with an impulsive probe
     pulse under the rotating wave approximation
@@ -219,9 +210,6 @@ def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
         option. If there are multiple initial values, simulating in the
         Heisenberg picture is much faster, since only one integration needs to
         be performed along the time axis. See Ref. [1] for more details.
-    show_progress : bool, optional
-        Whether or not to show a progress bar when running this function
-        (requires the `progressbar` module to be installed).
     ensemble_size : int, optional
         If provided, perform an ensemble average of this signal over Hamiltonian
         disorder, as determined by the `sample_ensemble` method of the provided
@@ -257,7 +245,7 @@ def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
             (t, signal) = linear_response(dynamical_model, liouv_space_path,
                                           time_max, init_state_portion,
                                           polarization, heisenberg_picture,
-                                          show_progress, **integrate_kwargs)
+                                          **integrate_kwargs)
             total_signal += signal
     if isinstance(total_signal, ZeroArray):
         raise ValueError('include_signal must include at least one of '
@@ -291,7 +279,7 @@ def third_order_response(dynamical_model, coherence_time_max,
                          population_time_max=None, population_times=None,
                          geometry='-++', polarization='xxxx',
                          include_signal=None, heisenberg_picture_t3=True,
-                         show_progress=True, **integrate_kwargs):
+                         **integrate_kwargs):
     """
     Evaluate a third order response function in the rotating wave approximation
 
@@ -413,13 +401,11 @@ def third_order_response(dynamical_model, coherence_time_max,
                 eom_heisen = dynamical_model.equation_of_motion(
                     subspaces[3], heisenberg_picture=True)
                 V_Gt3 = integrate(eom_heisen, V[3].bra_vector, t3,
-                                  show_progress=show_progress,
                                   **integrate_kwargs)
                 total_signal += np.einsum('ci,abi', V_Gt3, V_rho2)
             else:
                 total_signal += integrate(eom[2], V_rho2, t3,
                                           save_func=V[3].expectation_value,
-                                          show_progress=show_progress,
                                           **integrate_kwargs)
     if isinstance(total_signal, ZeroArray):
         if geometry == '++-':
