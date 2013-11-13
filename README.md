@@ -1,34 +1,51 @@
 QSpectra: Nonlinear Spectroscopy for Molecular Aggregates
 =========================================================
 
-QSpectra is a Python package designed for fast and flexible calculations of
-non-linear spectroscopy signals on molecular aggregates, such as photosynthetic
-light-harvesting complexes. The focus is on solving approximate models of electronic
-dynamics under known effective Hamiltonians as open quantum systems.
+QSpectra is a Python package designed for fast and flexible calculations of non-
+linear spectroscopy signals on molecular aggregates, such as photosynthetic
+light-harvesting complexes. The focus is on solving approximate models of
+electronic dynamics under known effective Hamiltonians as open quantum systems.
 
-The core idea is a dynamical model interface which allows for flexible composition
-of different dynamical models with different spectroscopy methods, as long as the
-dynamical model is prescribed by some sort of linear differential equation.
+The core idea is a dynamical model interface which allows for flexible
+composition of different dynamical models with different spectroscopy methods,
+as long as the equation of motion is a linear function of the system
+Hamiltonian.
 
 To enable efficient calculations, all simulations are performed under the
 rotating wave approximation. Furthermore, because the effective Hamiltonians
-conserve the number of electronic excitations, each model only propagates within
-the necessary fixed subspaces of Liouville subspace.
+conserve the number of electronic excitations, each model (when practical) only
+propagates within the necessary fixed subspaces of Liouville subspace.
 
-Although the QSpectra framework is written in Python submodules for new dynamical
-models may be written in a compiled language such as Fortran or C when necessary
-for performance.
+Although the QSpectra framework is written in Python, we expect that eventually
+submodules for new dynamical models may be written in a compiled language such
+as Fortran or C when if necessary for satisfactory performance.
+
+Install
+-------
+
+First, make sure you're running Python 2.7 and have recent versions of numpy
+and scipy installed.
+
+Then, clone the git repository and use `pip`:
+```
+git clone https://github.com/shoyer/qspectra.git
+pip install -e qspectra
+```
+
+I highly recommend using `-e` flag, which keeps the install directory in-place
+for local development.
 
 Features
 --------
 
 - Hamiltonians:
-    - Electronic systems (under effective Hamiltonians within the Heitler-London approximation)
+    - Electronic systems (under effective Hamiltonians within the Heitler-London
+      approximation)
     - Vibronic systems (electronic systems with explicit vibrational modes)
 - Dynamical models:
     - Unitary
     - Redfield theory (secular/non-secular)
-    - Zeroth order functional expansion (ZOFE), *in progress*
+    - Zeroth order functional expansion (ZOFE)
     - Hierarchical equations of motion (HEOM), *on the roadmap*
     - Time non-local ME (special case of HEOM), *on the roadmap*
 - Spectroscopy/simulation:
