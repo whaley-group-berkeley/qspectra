@@ -43,7 +43,7 @@ class DynamicalModel(object):
             Unit conversion from energy to time units (default 1).
         """
         self.hamiltonian = hamiltonian.in_rotating_frame(rw_freq)
-        self.rw_freq = self.hamiltonian.energy_offset
+        self.rw_freq = self.hamiltonian.mean_excitation_freq
         self.hilbert_subspace = hilbert_subspace
         self.unit_convert = unit_convert
 

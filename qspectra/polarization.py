@@ -5,7 +5,7 @@ from numpy import cos, sin, pi, sqrt
 import inspect
 import numpy as np
 
-from .utils import ZeroArray
+from .utils import ZeroArray, check_random_state
 
 
 COORD_MAP = {'x': np.array([1, 0, 0]),
@@ -80,7 +80,7 @@ def list_polarizations(invariant):
             if all(polarization[a] == polarization[b] for a, b in invariant)]
 
 
-def random_rotation_matrix(random_seed=None):
+def random_rotation_matrix(random_state=None):
     """
     Returns a uniformly distributed random rotation matrix
 
@@ -89,8 +89,7 @@ def random_rotation_matrix(random_seed=None):
     Arvo, J. Fast Random Rotation Matrices in Graphics Gems III 117-120
     (Academic Press Professional, Inc., 1992).
     """
-    np.random.seed(random_seed)
-    x1, x2, x3 = np.random.rand(3)
+    x1, x2, x3 = check_random_state(random_state).rand(3)
     theta = 2 * pi * x1
     phi = 2 * pi * x2
     R = [[cos(theta), sin(theta), 0], [-sin(theta), cos(theta), 0], [0, 0, 1]]
@@ -172,8 +171,13 @@ def optional_2nd_order_isotropic_average(func):
     def wrapper(*args, **kwargs):
         if kwargs.pop('exact_isotropic_average', False):
             kwargs = _get_call_args(func, *args, **kwargs)
-            weight = np.dot(*map(polarization_vector,
-                                 kwargs.pop('polarization')))
+            polarization = map(polarization_vector, kwargs.pop('polarization'))
+            if len(polarization) != 2:
+                raise ValueError('polarization vector %s is not length 2',
+                                 polarization)
+            weight = np.dot(*polarization)
+
+
             total_signal = ZeroArray()
             for p in ['xx', 'yy', 'zz']:
                 (t, signal) = func(polarization=p, **kwargs)

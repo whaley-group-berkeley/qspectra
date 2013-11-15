@@ -1,5 +1,7 @@
 from abc import ABCMeta, abstractmethod
 from functools import wraps
+from numbers import Number
+
 import numpy as np
 import scipy.linalg
 
@@ -8,7 +10,7 @@ from .operator_tools import (transition_operator, operator_extend, unit_vec,
                              tensor, extend_vib_operator, vib_create,
                              vib_annihilate)
 from .polarization import polarization_vector, random_rotation_matrix
-from .utils import imemoize, memoized_property, ZeroArray
+from .utils import imemoize, memoized_property, ZeroArray, check_random_state
 
 
 class HamiltonianError(Exception):
@@ -22,8 +24,9 @@ class Hamiltonian(object):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, ref_system=None):
-        self.ref_system = ref_system if ref_system is not None else self
+    def __init__(self, energy_offset=0):
+        self._energy_offset = energy_offset
+        self._ref_system = self
 
     @abstractmethod
     def H(self, subspace):
@@ -93,7 +96,8 @@ class Hamiltonian(object):
         """
         Average excited state transition energy
         """
-        return np.mean(self.E('e')) + self.energy_offset
+        return (np.mean(self._ref_system.E('e'))
+                + self._ref_system._energy_offset)
 
     @property
     def freq_step(self):
@@ -104,7 +108,7 @@ class Hamiltonian(object):
         Note: If this frequency is very high, you probably need to transform to
         the rotating frame first.
         """
-        energies = self.ref_system.E('gef')
+        energies = self._ref_system.E('gef')
         freq_span = energies.max() - energies.min()
         return 2 * (freq_span + self.energy_spread_extra)
 
@@ -113,6 +117,15 @@ class Hamiltonian(object):
         return 1.0 / self.freq_step
 
 
+class DiagonalGaussianDisorder(object):
+    def __init__(self, fwhm, n_sites):
+        self.fwhm = fwhm
+        self.n_sites = n_sites
+    def __call__(self, random_state):
+        return np.diag((self.fwhm * GAUSSIAN_SD_FWHM)
+                       * random_state.randn(self.n_sites))
+
+ 
 class ElectronicHamiltonian(Hamiltonian):
     """
     Hamiltonian for an electronic system with coupling to an external field
@@ -121,38 +134,58 @@ class ElectronicHamiltonian(Hamiltonian):
     Properties
     ----------
     H_1exc : np.ndarray
-        Matrix representation of this hamiltonian in the 1-excitation subspace
-    energy_offset : number, optional
-        Constant energy offset of the diagonal entries in H_1exc from the ground
-        state energy.
-    disorder_fwhm : float, optional
-        Full-width-at-half-maximum of the Gaussian distribution used for sampling
-        static disorder with the `sample_ensemble` method.
+        Matrix representation of this Hamiltonian in the 1-excitation subspace
     bath : bath.Bath, optional
         Object containing the bath information (i.e., correlation function and
         temperature). Each site is assumed to be linearly coupled to an
         identical bath of this form.
     dipoles : np.ndarray, optional
         n x 3 array of dipole moments for each site.
+    disorder : number or function, optional
+        Full-width-at-half-maximum of diagonal, Gaussian static disorder
+        (independently sampled as each site) or a function which generates new
+        examples of static disorder. This argument controls how to generate
+        new samples with `sample_ensemble` method. By default (`disorder=None`),
+        no static disorder is added.
+
+        If a function (or other callable), it should take a
+        `np.random.RandomState` object and return an array which can be added to
+        `H_1exc` to provide a new sample of static disorder. For example, to
+        produce Gaussian static disorder with standard deviation 100 for system
+        with two sites, you could write:
+            ```
+            def disorder(random_state):
+                return np.diag(100 * random_state.randn(2))
+            ```
+        NOTE: Only use methods of the `random_state` object to generate random
+        numbers in your custom function. Otherwise, your random ensemble will
+        not be reproducible.
+    random_seed : int, optional (default 0)
+        Random seed used to produce reproducible sampling with the
+        `sample_ensemble` method. Must be a non-negative integer or other valid
+        input for np.random.RandomState.
     energy_spread_extra : float, optional (default 100)
         Default extra frequency to add to the spread of energies when
-        determining the frequency step size automatically.
-    ref_system : ElectronicHamiltonian, optional
-        A reference to another Hamiltonian from which to retrieve the
-        `freq_step` and `time_step` properties. Included so that sampling and
-        rotating frame frequencies are stable under the `sample_ensemble`
-        method.
+        determining the frequency step size automatically. To avoid unnecessary
+        work when calculating quantities like correlation functions, this
+        constant should be set to roughly the width of inhomogeneous broadening
+        or the dephasing rate. Units should match `H_1exc`.
+
+    See also
+    --------
+    np.random.RandomState
     """
-    def __init__(self, H_1exc, energy_offset=0, disorder_fwhm=0, bath=None,
-                 dipoles=None, energy_spread_extra=100.0, ref_system=None):
+    def __init__(self, H_1exc, bath=None, dipoles=None, disorder=None,
+                 random_seed=0, energy_spread_extra=100.0):
         self.H_1exc = np.asarray(H_1exc)
-        self.energy_offset = energy_offset
-        self.disorder_fwhm = disorder_fwhm
         self.bath = bath
         self.dipoles = np.asarray(dipoles) if dipoles is not None else None
+        self.disorder = disorder
+        self.random_seed = random_seed
         self.energy_spread_extra = energy_spread_extra
+        # used by various dynamics methods to determine indices:
         self.n_vibrational_states = 1
-        super(ElectronicHamiltonian, self).__init__(ref_system)
+        super(ElectronicHamiltonian, self).__init__()
 
     @property
     def n_sites(self):
@@ -183,40 +216,56 @@ class ElectronicHamiltonian(Hamiltonian):
         Returns a new Hamiltonian shifted to the rotating frame at the given
         frequency
 
-        By default, sets the rotating frame frequency to the central frequency
-        of this hamiltonian's `ref_system`.
+        By default, sets the rotating frame frequency to the mean excitation
+        frequency.
         """
         if rw_freq is None:
-            rw_freq = self.ref_system.mean_excitation_freq
-        H_1exc = self.H_1exc - ((rw_freq - self.energy_offset)
+            rw_freq = self.mean_excitation_freq
+        H_1exc = self.H_1exc - ((rw_freq - self._energy_offset)
                                 * np.identity(len(self.H_1exc)))
-        ref_system = (self.ref_system.in_rotating_frame(rw_freq)
-                      if self.ref_system is not self else None)
-        return type(self)(H_1exc, rw_freq, self.disorder_fwhm, self.bath,
-                          self.dipoles, self.energy_spread_extra, ref_system)
+        H_rw = type(self)(H_1exc, self.bath, self.dipoles, self.disorder,
+                          self.random_seed, self.energy_spread_extra)
+        H_rw._energy_offset = rw_freq
+        if self._ref_system is not self:
+            H_rw._ref_system = self._ref_system.in_rotating_frame(rw_freq)
+        return H_rw
 
-    def sample_ensemble(self, ensemble_size=1, randomize_orientations=False,
-                        random_seed=None):
+    def sample_ensemble(self, ensemble_size=1, random_orientations=False):
         """
-        Yields `ensemble_size` re-samplings of this Hamiltonian with diagonal
-        disorder
+        Yields `ensemble_size` re-samplings of this Hamiltonian over disorder
+
+        Each re-sampled Hamiltonian is another valid Hamiltonian, except
+        its default rotating wave frequency, time step and frequency step all
+        match the parent Hamiltonian. This guarantees that all the time and
+        frequency ticks match when simulating an ensemble generated from this
+        method.
+
+        Hamiltonians produced by this method have disorder set to `None`, so
+        if you use their `sample_ensemble` method, you will not produce any
+        additional static disorder, although you could randomize their
+        orientations.
         """
-        if self.disorder_fwhm is None:
-            raise HamiltonianError('unable to sample ensemble because '
-                                   'disorder_fwhm is undefined')
-        np.random.seed(random_seed)
-        disorder = (self.disorder_fwhm * GAUSSIAN_SD_FWHM
-                    * np.random.randn(ensemble_size, self.n_sites))
-        for n, disorder_instance in enumerate(disorder):
-            H_1exc = self.H_1exc + np.diag(disorder_instance)
-            if randomize_orientations:
-                seed = None if random_seed is None else random_seed + n
-                dipoles = np.einsum('mn,in->im', random_rotation_matrix(seed),
+        if self.disorder is None:
+            disorder_func = lambda x: 0
+        elif isinstance(self.disorder, Number):
+            disorder_func = DiagonalGaussianDisorder(self.disorder, self.n_sites)
+        else:
+            disorder_func = self.disorder
+        seed = np.array([self.random_seed]).reshape(-1)
+        for n in xrange(ensemble_size):
+            random_state = check_random_state(seed + [n])
+            H_1exc = self.H_1exc + disorder_func(random_state)
+            if random_orientations:
+                dipoles = np.einsum('mn,in->im',
+                                    random_rotation_matrix(random_state),
                                     self.dipoles)
             else:
                 dipoles = self.dipoles
-            yield type(self)(H_1exc, self.energy_offset, None, self.bath,
-                             dipoles, self.energy_spread_extra, self)
+            # note: sampled Hamiltonians should have no static disorder
+            ham = type(self)(H_1exc, self.bath, dipoles, None, None,
+                             self.energy_spread_extra)
+            ham._ref_system = self
+            yield ham
 
     def dipole_operator(self, subspace='gef', polarization='x',
                         transitions='-+'):
@@ -245,7 +294,8 @@ class ElectronicHamiltonian(Hamiltonian):
         """
         if self.bath is None:
             raise HamiltonianError('bath undefined')
-        return [self.number_operator(n, subspace) for n in xrange(self.n_sites)]
+        return np.array([self.number_operator(n, subspace)
+                         for n in xrange(self.n_sites)])
 
 
 def thermal_state(hamiltonian_matrix, temperature):
@@ -291,23 +341,17 @@ class VibronicHamiltonian(Hamiltonian):
         where |n> is the singly excited electronic state of site n in the full
         singly excited subspace, and b(m) and b(m)^\dagger are the
         vibrational annihilation and creation operators for vibration m.
-    ref_system : VibronicHamiltonian, optional
-        A reference to another Hamiltonian from which to retrieve the
-        `freq_step` and `time_step` properties. Included so that sampling and
-        rotating frame frequencies are stable under the `sample_ensemble`
-        method.
     """
     def __init__(self, electronic, n_vibrational_levels, vib_energies,
-                 elec_vib_couplings, ref_system=None):
+                 elec_vib_couplings):
         self.electronic = electronic
-        self.energy_offset = self.electronic.energy_offset
         self.energy_spread_extra = self.electronic.energy_spread_extra
         self.bath = self.electronic.bath
         self.n_sites = self.electronic.n_sites
         self.n_vibrational_levels = np.asarray(n_vibrational_levels)
         self.vib_energies = np.asarray(vib_energies)
         self.elec_vib_couplings = np.asarray(elec_vib_couplings)
-        super(VibronicHamiltonian, self).__init__(ref_system)
+        super(VibronicHamiltonian, self).__init__(self.electronic._energy_offset)
 
     @memoized_property
     def n_vibrational_states(self):
@@ -381,22 +425,23 @@ class VibronicHamiltonian(Hamiltonian):
         Returns a new Hamiltonian shifted to the rotating frame at the given
         frequency
 
-        By default, sets the rotating frame to the central frequency.
+        By default, sets the rotating frame frequency to the mean excitation
+        frequency of the electronic part of the Hamiltonian.
         """
-        ref_system = (self.ref_system.in_rotating_frame(rw_freq)
-                      if self.ref_system is not self else None)
         return type(self)(self.electronic.in_rotating_frame(rw_freq),
                           self.n_vibrational_levels, self.vib_energies,
-                          self.elec_vib_couplings, ref_system)
+                          self.elec_vib_couplings)
 
     def sample_ensemble(self, *args, **kwargs):
         """
-        Yields `ensemble_size` re-samplings of this Hamiltonian with diagonal
-        electronic disorder
+        Yields `ensemble_size` re-samplings of this Hamiltonian over disorder
+
+        Passes on all arguments to the contained electronic Hamiltonian; each
+        re-sampling replaces the electronic Hamiltonian.
         """
         for elec in self.electronic.sample_ensemble(*args, **kwargs):
             yield type(self)(elec, self.n_vibrational_levels, self.vib_energies,
-                             self.elec_vib_couplings, self)
+                             self.elec_vib_couplings)
 
     def el_to_sys_operator(self, el_operator):
         """
@@ -418,23 +463,23 @@ class VibronicHamiltonian(Hamiltonian):
         Return the matrix representation in the given subspace of the requested
         dipole operator
         """
-        return self.el_to_sys_operator(self.electronic.
-                                       dipole_operator(*args, **kwargs))
+        return self.el_to_sys_operator(
+            self.electronic.dipole_operator(*args, **kwargs))
 
     def system_bath_couplings(self, *args, **kwargs):
         """
         Return a list of matrix representations in the given subspace of the
         system-bath coupling operators
         """
-        return self.el_to_sys_operator(self.electronic.
-                                       system_bath_couplings(*args, **kwargs))
+        return self.el_to_sys_operator(
+            self.electronic.system_bath_couplings(*args, **kwargs))
 
 
 def optional_ensemble_average(func):
     """
-    Function decorator to add optional `ensemble_size`,
-    `ensemble_random_orientations` and `ensemble_random_seed` keyword
-    arguments to a function that takes a dynamical model as its first argument
+    Function decorator to add optional `ensemble_size` and
+    `ensemble_random_orientations` keyword arguments to a function that takes a
+    dynamical model as its first argument
 
     If `ensemble_size` is set, the function is resampled that number of times
     with dynamical models yielded by the original dynamical model's
@@ -444,17 +489,15 @@ def optional_ensemble_average(func):
     def wrapper(dynamical_model, *args, **kwargs):
         ensemble_size = kwargs.pop('ensemble_size', None)
         if ensemble_size is not None:
-            random_seed = kwargs.pop('ensemble_random_seed', None)
             random_orientations = kwargs.pop(
                 'ensemble_random_orientations', False)
             total_signal = ZeroArray()
             for dyn_model in dynamical_model.sample_ensemble(
-                    ensemble_size, random_orientations, random_seed):
-                (t, signal) = func(dyn_model, *args, **kwargs)
+                    ensemble_size, random_orientations):
+                (ticks, signal) = func(dyn_model, *args, **kwargs)
                 total_signal += signal
             total_signal /= ensemble_size
-            return (t, total_signal)
+            return (ticks, total_signal)
         else:
             return func(dynamical_model, *args, **kwargs)
     return wrapper
-

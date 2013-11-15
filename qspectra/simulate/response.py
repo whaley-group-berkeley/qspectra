@@ -1,5 +1,5 @@
 """
-Module for response function based methods
+Response function based methods for calculating linear and non-linear spectra
 """
 import numpy as np
 
@@ -9,6 +9,9 @@ from ..polarization import (optional_2nd_order_isotropic_average,
 from .utils import (integrate, return_fourier_transform,
                     return_real_fourier_transform)
 from ..utils import ZeroArray
+
+# TODO: update the functions in this module to use wrappers so that their
+# arguments can be discovered via introspection.
 
 
 @optional_ensemble_average
@@ -55,8 +58,6 @@ def linear_response(dynamical_model, liouv_space_path, time_max,
     ensemble_random_orientations : boolean, default False
         Whether or not to randomize the orientation of each member of the
         ensemble. Only relevant if `ensemble_size` is set.
-    ensemble_random_seed : int or array of int, optional
-        Random seed for ensemble sampling.
     exact_isotropic_average : boolean, default False
         If True, perform an exact average over all molecular orientations, at
         cost of 3x the computation time.
@@ -140,8 +141,6 @@ def absorption_spectra(dynamical_model, time_max, correlation_decay_time=None,
     ensemble_random_orientations : boolean, default False
         Whether or not to randomize the orientation of each member of the
         ensemble. Only relevant if `ensemble_size` is set.
-    ensemble_random_seed : int or array of int, optional
-        Random seed for ensemble sampling.
     exact_isotropic_average : boolean, default False
         If True, perform an exact average over all molecular orientations, at
         cost of 3x the computation time.
@@ -217,8 +216,6 @@ def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
     ensemble_random_orientations : boolean, default False
         Whether or not to randomize the orientation of each member of the
         ensemble. Only relevant if `ensemble_size` is set.
-    ensemble_random_seed : int or array of int, optional
-        Random seed for ensemble sampling.
     exact_isotropic_average : boolean, default False
         If True, perform an exact average over all molecular orientations, at
         cost of 3x the computation time.
@@ -327,8 +324,6 @@ def third_order_response(dynamical_model, coherence_time_max,
     ensemble_random_orientations : boolean, default False
         Whether or not to randomize the orientation of each member of the
         ensemble. Only relevant if `ensemble_size` is set.
-    ensemble_random_seed : int or array of int, optional
-        Random seed for ensemble sampling.
     exact_isotropic_average : boolean, default False
         If True, perform an exact average over all molecular orientations, at
         cost of 3x the computation time.
@@ -408,6 +403,7 @@ def third_order_response(dynamical_model, coherence_time_max,
                                           save_func=V[3].expectation_value,
                                           **integrate_kwargs)
     if isinstance(total_signal, ZeroArray):
+        # this means nothing was included in the signal
         if geometry == '++-':
             raise ValueError('include_signal must include at least one of '
                              "'ESA1' or 'ESA2'")

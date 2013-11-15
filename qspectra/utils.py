@@ -83,6 +83,18 @@ class imemoize(object):
         return res
 
 
+def check_random_state(seed):
+    """Cast seed into a np.random.RandomState object
+
+    If seed is None, return numpy's global RandomState object
+    """
+    if seed is None:
+        return np.random.mtrand._rand
+    if isinstance(seed, np.random.RandomState):
+        return seed
+    return np.random.RandomState(seed)
+
+
 def copy_with_new_cache(obj):
     """
     Return a shallow copy of the provided object, resetting the cache as used by
