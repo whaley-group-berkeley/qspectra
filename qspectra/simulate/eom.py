@@ -1,11 +1,10 @@
 """
 Equation of motion based methods non-linear spectra and dynamics
 """
-
 import numpy as np
 
-from ..hamiltonian import optional_ensemble_average
-from ..polarization import optional_2nd_order_isotropic_average
+from .decorators import (optional_ensemble_average,
+                         optional_2nd_order_isotropic_average)
 from .utils import integrate
 
 

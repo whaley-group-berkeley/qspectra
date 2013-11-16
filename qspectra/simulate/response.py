@@ -3,9 +3,9 @@ Response function based methods for calculating linear and non-linear spectra
 """
 import numpy as np
 
-from ..hamiltonian import optional_ensemble_average
-from ..polarization import (optional_2nd_order_isotropic_average,
-                            optional_4th_order_isotropic_average)
+from .decorators import (optional_ensemble_average,
+                         optional_2nd_order_isotropic_average,
+                         optional_4th_order_isotropic_average)
 from .utils import integrate, fourier_transform
 from ..utils import ZeroArray
 

@@ -1,6 +1,5 @@
 # TODO: to improve extendability, move this file into separate subfolder
 from abc import ABCMeta, abstractmethod
-from functools import wraps
 from numbers import Number
 
 import numpy as np
@@ -11,7 +10,7 @@ from .operator_tools import (transition_operator, operator_extend, unit_vec,
                              tensor, extend_vib_operator, vib_create,
                              vib_annihilate)
 from .polarization import polarization_vector, random_rotation_matrix
-from .utils import imemoize, memoized_property, ZeroArray, check_random_state
+from .utils import imemoize, memoized_property, check_random_state
 
 
 class HamiltonianError(Exception):
@@ -25,13 +24,28 @@ class Hamiltonian(object):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, energy_offset=0):
-        # used to keep track of original transition energies even after
-        # transforming to a rotating frame:
-        self._energy_offset = energy_offset
+    def __init__(self, energy_offset_source=None):
         # used to keep track of the original, unperturbed Hamiltonian even
         # after calling `sample_ensemble`:
-        self._ref_system = self
+        self.ref_system = self
+        # used to keep track of original transition energies even after
+        # transforming to a rotating frame:
+        if energy_offset_source is None:
+            self._energy_offset = 0
+            self._energy_offset_source = self 
+        else:
+            self._energy_offset_source = energy_offset_source
+
+    @property
+    def energy_offset(self):
+        return self._energy_offset_source._energy_offset
+
+    @energy_offset.setter
+    def energy_offset(self, value):
+        if self._energy_offset_source is not self:
+            raise HamiltonianError('cannot set `energy_offset` for this '
+                                   'Hamiltonian directly')
+        self._energy_offset = value
 
     @abstractmethod
     def H(self, subspace):
@@ -101,8 +115,8 @@ class Hamiltonian(object):
         """
         Average excited state transition energy
         """
-        return (np.mean(self._ref_system.E('e'))
-                + self._ref_system._energy_offset)
+        # should remain fixed under sampling and rotating frame transformations
+        return np.mean(self.ref_system.E('e')) + self.ref_system.energy_offset
 
     @property
     def freq_step(self):
@@ -113,12 +127,21 @@ class Hamiltonian(object):
         Note: If this frequency is very high, you probably need to transform to
         the rotating frame first.
         """
-        energies = self._ref_system.E('gef')
+        # should remain fixed under sampling but NOT under rotating frame
+        # transformations
+        energies = self.ref_system.E('gef')
         freq_span = energies.max() - energies.min()
         return 2 * (freq_span + self.energy_spread_extra)
 
     @property
     def time_step(self):
+        """
+        An appropriate sampling time step, according to the Nyquist theorem, so
+        that all frequencies of the Hamiltonian can be resolved
+
+        Note: If this time-step is very short, you probably need to transform to
+        the rotating frame first.
+        """
         return 1.0 / self.freq_step
 
 
@@ -220,17 +243,22 @@ class ElectronicHamiltonian(Hamiltonian):
         frequency
 
         By default, sets the rotating frame frequency to the mean excitation
-        frequency.
+        frequency. This method is idempotent: applying it twice will return the
+        same Hamiltonian as applying it once.
+
+        Note: The `in_rotating_frame` and `sample_ensemble` methods are designed
+        carefully so that they commute -- it should not matter in which order
+        they are applied.
         """
         if rw_freq is None:
             rw_freq = self.mean_excitation_freq
-        H_1exc = self.H_1exc - ((rw_freq - self._energy_offset)
+        H_1exc = self.H_1exc - ((rw_freq - self.energy_offset)
                                 * np.identity(len(self.H_1exc)))
         ham = type(self)(H_1exc, self.bath, self.dipoles, self.disorder,
                          self.random_seed, self.energy_spread_extra)
-        ham._energy_offset = rw_freq
-        if self._ref_system is not self:
-            ham._ref_system = self._ref_system.in_rotating_frame(rw_freq)
+        ham.energy_offset = rw_freq
+        if self.ref_system is not self:
+            ham.ref_system = self.ref_system.in_rotating_frame(rw_freq)
         return ham
 
     def sample_ensemble(self, ensemble_size=1, random_orientations=False):
@@ -247,6 +275,10 @@ class ElectronicHamiltonian(Hamiltonian):
         if you use their `sample_ensemble` method, you will not produce any
         additional static disorder, although you could randomize their
         orientations.
+
+        Note: The `in_rotating_frame` and `sample_ensemble` methods are designed
+        carefully so that they commute -- it should not matter in which order
+        they are applied.
         """
         if self.disorder is None:
             disorder_func = lambda x: 0
@@ -268,7 +300,7 @@ class ElectronicHamiltonian(Hamiltonian):
             # note: sampled Hamiltonians should have no static disorder
             ham = type(self)(H_1exc, self.bath, dipoles, None, None,
                              self.energy_spread_extra)
-            ham._ref_system = self
+            ham.ref_system = self
             yield ham
 
     def dipole_operator(self, subspace='gef', polarization='x',
@@ -355,7 +387,7 @@ class VibronicHamiltonian(Hamiltonian):
         self.n_vibrational_levels = np.asarray(n_vibrational_levels)
         self.vib_energies = np.asarray(vib_energies)
         self.elec_vib_couplings = np.asarray(elec_vib_couplings)
-        super(VibronicHamiltonian, self).__init__(self.electronic._energy_offset)
+        super(VibronicHamiltonian, self).__init__(self.electronic)
 
     @memoized_property
     def n_vibrational_states(self):
@@ -444,8 +476,10 @@ class VibronicHamiltonian(Hamiltonian):
         re-sampling replaces the electronic Hamiltonian.
         """
         for elec in self.electronic.sample_ensemble(*args, **kwargs):
-            yield type(self)(elec, self.n_vibrational_levels, self.vib_energies,
+            ham = type(self)(elec, self.n_vibrational_levels, self.vib_energies,
                              self.elec_vib_couplings)
+            ham.ref_system = self
+            yield ham
 
     def el_to_sys_operator(self, el_operator):
         """
@@ -477,30 +511,3 @@ class VibronicHamiltonian(Hamiltonian):
         """
         return self.el_to_sys_operator(
             self.electronic.system_bath_couplings(*args, **kwargs))
-
-
-def optional_ensemble_average(func):
-    """
-    Function decorator to add optional `ensemble_size` and
-    `ensemble_random_orientations` keyword arguments to a function that takes a
-    dynamical model as its first argument
-
-    If `ensemble_size` is set, the function is resampled that number of times
-    with dynamical models yielded by the original dynamical model's
-    `sample_ensemble` method.
-    """
-    @wraps(func)
-    def wrapper(dynamical_model, *args, **kwargs):
-        ensemble_size = kwargs.pop('ensemble_size', None)
-        random_orientations = kwargs.pop('ensemble_random_orientations', False)
-        if ensemble_size is not None:
-            total_signal = ZeroArray()
-            for dyn_model in dynamical_model.sample_ensemble(
-                    ensemble_size, random_orientations):
-                (ticks, signal) = func(dyn_model, *args, **kwargs)
-                total_signal += signal
-            total_signal /= ensemble_size
-            return (ticks, total_signal)
-        else:
-            return func(dynamical_model, *args, **kwargs)
-    return wrapper

@@ -43,7 +43,7 @@ class DynamicalModel(object):
             Unit conversion from energy to time units (default 1).
         """
         self.hamiltonian = hamiltonian.in_rotating_frame(rw_freq)
-        self.rw_freq = self.hamiltonian.mean_excitation_freq
+        self.rw_freq = self.hamiltonian.energy_offset
         self.hilbert_subspace = hilbert_subspace
         self.unit_convert = unit_convert
 
@@ -62,7 +62,9 @@ class DynamicalModel(object):
         integration routine
 
         If `heisenberg_picture` is True, returns an equation of motion for
-        operators in the Heisenberg picture.
+        operators in the Heisenberg picture. If a dynamical model does not
+        implement an equation of motion in the Heisenberg, it will raise a
+        `NotImplementedError`.
         """
 
     @abstractmethod
