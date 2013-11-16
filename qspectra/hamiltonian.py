@@ -1,3 +1,4 @@
+# TODO: to improve extendability, move this file into separate subfolder
 from abc import ABCMeta, abstractmethod
 from functools import wraps
 from numbers import Number
@@ -25,7 +26,11 @@ class Hamiltonian(object):
     __metaclass__ = ABCMeta
 
     def __init__(self, energy_offset=0):
+        # used to keep track of original transition energies even after
+        # transforming to a rotating frame:
         self._energy_offset = energy_offset
+        # used to keep track of the original, unperturbed Hamiltonian even
+        # after calling `sample_ensemble`:
         self._ref_system = self
 
     @abstractmethod
@@ -117,13 +122,10 @@ class Hamiltonian(object):
         return 1.0 / self.freq_step
 
 
-class DiagonalGaussianDisorder(object):
-    def __init__(self, fwhm, n_sites):
-        self.fwhm = fwhm
-        self.n_sites = n_sites
-    def __call__(self, random_state):
-        return np.diag((self.fwhm * GAUSSIAN_SD_FWHM)
-                       * random_state.randn(self.n_sites))
+def diagonal_gaussian_disorder(fwhm, n_sites):
+    def disorder(random_state):
+        return np.diag((fwhm * GAUSSIAN_SD_FWHM) * random_state.randn(n_sites))
+    return disorder
 
  
 class ElectronicHamiltonian(Hamiltonian):
@@ -159,7 +161,8 @@ class ElectronicHamiltonian(Hamiltonian):
             ```
         NOTE: Only use methods of the `random_state` object to generate random
         numbers in your custom function. Otherwise, your random ensemble will
-        not be reproducible.
+        not be reproducible, which may add noise when you calculate ensemble
+        averages with the spectroscopy methods.
     random_seed : int, optional (default 0)
         Random seed used to produce reproducible sampling with the
         `sample_ensemble` method. Must be a non-negative integer or other valid
@@ -223,12 +226,12 @@ class ElectronicHamiltonian(Hamiltonian):
             rw_freq = self.mean_excitation_freq
         H_1exc = self.H_1exc - ((rw_freq - self._energy_offset)
                                 * np.identity(len(self.H_1exc)))
-        H_rw = type(self)(H_1exc, self.bath, self.dipoles, self.disorder,
-                          self.random_seed, self.energy_spread_extra)
-        H_rw._energy_offset = rw_freq
+        ham = type(self)(H_1exc, self.bath, self.dipoles, self.disorder,
+                         self.random_seed, self.energy_spread_extra)
+        ham._energy_offset = rw_freq
         if self._ref_system is not self:
-            H_rw._ref_system = self._ref_system.in_rotating_frame(rw_freq)
-        return H_rw
+            ham._ref_system = self._ref_system.in_rotating_frame(rw_freq)
+        return ham
 
     def sample_ensemble(self, ensemble_size=1, random_orientations=False):
         """
@@ -248,10 +251,11 @@ class ElectronicHamiltonian(Hamiltonian):
         if self.disorder is None:
             disorder_func = lambda x: 0
         elif isinstance(self.disorder, Number):
-            disorder_func = DiagonalGaussianDisorder(self.disorder, self.n_sites)
+            disorder_func = diagonal_gaussian_disorder(self.disorder,
+                                                       self.n_sites)
         else:
             disorder_func = self.disorder
-        seed = np.array([self.random_seed]).reshape(-1)
+        seed = list(np.atleast_1d(self.random_seed))
         for n in xrange(ensemble_size):
             random_state = check_random_state(seed + [n])
             H_1exc = self.H_1exc + disorder_func(random_state)
@@ -488,9 +492,8 @@ def optional_ensemble_average(func):
     @wraps(func)
     def wrapper(dynamical_model, *args, **kwargs):
         ensemble_size = kwargs.pop('ensemble_size', None)
+        random_orientations = kwargs.pop('ensemble_random_orientations', False)
         if ensemble_size is not None:
-            random_orientations = kwargs.pop(
-                'ensemble_random_orientations', False)
             total_signal = ZeroArray()
             for dyn_model in dynamical_model.sample_ensemble(
                     ensemble_size, random_orientations):

@@ -15,7 +15,7 @@ class ZeroArray(object):
 
     It's useful to initialize arrays of all zeros on which to perform inplace
     operations, of course, because it allows for inplace array summations inside
-    a `for` loop, which can be much faster (and simplier) than calling Python's
+    a `for` loop, which can be much faster (and simpler) than calling Python's
     built-in `sum` (which is not inplace).
 
     Example
@@ -57,7 +57,7 @@ class imemoize(object):
     be hashable.
 
     Source (MIT Licensed)
-    --------------------
+    ---------------------
         http://code.activestate.com/recipes/
         577452-a-memoize-decorator-for-instance-methods/
     """

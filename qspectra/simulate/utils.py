@@ -112,6 +112,10 @@ def slice_along_axis(start=None, stop=None, step=None, axis=0, ndim=1):
                  for n in xrange(ndim))
 
 
+def is_constant(x, atol=1e-7):
+    return np.sum(np.abs(x - x[0])) < atol
+
+
 def fourier_transform(t, x, axis=-1, rw_freq=0, unit_convert=1,
                       reverse_freq=False, positive_time_only=True):
     """
@@ -148,7 +152,7 @@ def fourier_transform(t, x, axis=-1, rw_freq=0, unit_convert=1,
     """
     # TODO: update this function so it doesn't need a `positive_time_only`
     # switch but can enlarge x and t to the right size automatically
-    if len(np.unique(np.diff(t))) != 1:
+    if not is_constant(np.diff(t)):
         raise ValueError('Sample times must differ by a constant')
     if len(t.shape) > 1:
         raise ValueError('t must be one dimensional')
@@ -200,30 +204,3 @@ def bound_signal(ticks, signal, bounds, axis=0):
     i0, i1 = sorted(np.argmin(np.abs(ticks - bound)) for bound in bounds)
     nd_index = slice_along_axis(i0, i1 + 1, None, axis, len(signal.shape))
     return ticks[i0:(i1 + 1)], signal[nd_index]
-
-
-def return_fourier_transform(func):
-    """
-    Decorator that transforms the returned signal of this function from (t, x)
-    to (f, X), where X is the Fourier transform of x.
-    """
-    @wraps(func)
-    def wrapper(dynamical_model, *args, **kwargs):
-        (t, x) = func(dynamical_model, *args, **kwargs)
-        unit_convert = getattr(dynamical_model, 'unit_convert', None)
-        (f, X) = fourier_transform(t, x, rw_freq=dynamical_model.rw_freq,
-                                   unit_convert=unit_convert)
-        return (f, X)
-    return wrapper
-
-
-def return_real_fourier_transform(func):
-    """
-    Decorator that transforms the returned signal of this function from (t, x)
-    to (f, X.real), where X is the Fourier transform of x.
-    """
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        (f, X) = return_fourier_transform(func)(*args, **kwargs)
-        return (f, X.real)
-    return wrapper
