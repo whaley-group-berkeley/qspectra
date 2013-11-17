@@ -20,7 +20,7 @@ add it to your path, i.e.,
 git clone https://gist.github.com/7497853.git
 cd 7497853
 chmod +x ipnbdoctest.py
-ln -s ipnbdoctest.py ipnbdoctest
+ln -s ipnbdoctest.py /usr/local/bin/ipnbdoctest
 ```
 
 You'll also need to install [pypng](https://github.com/drj11/pypng):
@@ -33,6 +33,7 @@ Then navigate to this directory and run:
 ipnbdoctest *.ipynb
 ```
 
-**Note**: This script has a time-out of 60 seconds for evaluating each cell.
-It is also unclear whether or not graphics from different platforms (e.g., OS X
-vs Linux) produce exactly the same images, pixel for pixel.
+**Note**: This script has a time-out of 60 seconds for evaluating each cell. It
+is also unclear whether or not graphics produced on different platforms (e.g.,
+OS X vs Linux) are exactly identical, pixel for pixel. But this still is a
+pretty neat way to do testing.
