@@ -1,8 +1,11 @@
+"""
+Utility functions for producing and manipulating the output of simulations
+"""
 from functools import wraps
+
 from numpy import pi
 import numpy as np
 import scipy.integrate
-
 
 from ..utils import ndarray_list
 
@@ -109,6 +112,10 @@ def slice_along_axis(start=None, stop=None, step=None, axis=0, ndim=1):
                  for n in xrange(ndim))
 
 
+def is_constant(x, atol=1e-7):
+    return np.sum(np.abs(x - x[0])) < atol
+
+
 def fourier_transform(t, x, axis=-1, rw_freq=0, unit_convert=1,
                       reverse_freq=False, positive_time_only=True):
     """
@@ -120,17 +127,17 @@ def fourier_transform(t, x, axis=-1, rw_freq=0, unit_convert=1,
     Parameters
     ----------
     t : np.ndarray
-        Times at which the signal is defined.
+        1D array giving the times at which the signal is defined.
     x : np.ndarray
         Signal to Fourier transform.
-    axes : int, optional
-        Axis along which to apply the Fourier transform (defaults to -1).
+    axis : int, optional
+        Axis along which to apply the Fourier transform to `x` (defaults to -1).
     rw_freq : number, optional
         Frequency of the rotating frame in which the signal is sampled.
     unit_convert : number, optional
         Unit conversion from frequency to time units (default 1).
     reverse_freq : boolean, optional
-        Switch the exponential from +\omega to -\omega.
+        Switch the sign in the exponent from + to -.
     positive_time_only : boolean, optional
         If True (default), the signal is assumed to only be defined for at
         positive times, and the signal is zero-padded on the left with len(x)
@@ -143,6 +150,16 @@ def fourier_transform(t, x, axis=-1, rw_freq=0, unit_convert=1,
     X : np.ndarray
         The Fourier transformed signal.
     """
+    # TODO: update this function so it doesn't need a `positive_time_only`
+    # switch but can enlarge x and t to the right size automatically
+    if not is_constant(np.diff(t)):
+        raise ValueError('Sample times must differ by a constant')
+    if len(t.shape) > 1:
+        raise ValueError('t must be one dimensional')
+    if len(t) != x.shape[axis]:
+        raise ValueError('t must have the same length as the shape of x along '
+                         'the given axis')
+
     x_all = (np.concatenate([np.zeros_like(x), x], axis=axis)
              if positive_time_only else x)
     x_shifted = np.fft.fftshift(x_all, axes=axis)
@@ -187,30 +204,3 @@ def bound_signal(ticks, signal, bounds, axis=0):
     i0, i1 = sorted(np.argmin(np.abs(ticks - bound)) for bound in bounds)
     nd_index = slice_along_axis(i0, i1 + 1, None, axis, len(signal.shape))
     return ticks[i0:(i1 + 1)], signal[nd_index]
-
-
-def return_fourier_transform(func):
-    """
-    Decorator that transforms the returned signal of this function from (t, x)
-    to (f, X), where X is the Fourier transform of x.
-    """
-    @wraps(func)
-    def wrapper(dynamical_model, *args, **kwargs):
-        (t, x) = func(dynamical_model, *args, **kwargs)
-        unit_convert = getattr(dynamical_model, 'unit_convert', None)
-        (f, X) = fourier_transform(t, x, rw_freq=dynamical_model.rw_freq,
-                                   unit_convert=unit_convert)
-        return (f, X)
-    return wrapper
-
-
-def return_real_fourier_transform(func):
-    """
-    Decorator that transforms the returned signal of this function from (t, x)
-    to (f, X.real), where X is the Fourier transform of x.
-    """
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        (f, X) = return_fourier_transform(func)(*args, **kwargs)
-        return (f, X.real)
-    return wrapper

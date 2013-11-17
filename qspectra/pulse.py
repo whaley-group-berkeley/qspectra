@@ -42,6 +42,9 @@ class Pulse(object):
             Complex-values of the pulse electric field at requested time t.
         """
 
+    # TODO: add generic methods to calculate other representations of pulses
+    # (e.g., in the frequency domain or the Wigner distribution)
+
 
 class CustomPulse(Pulse):
     """

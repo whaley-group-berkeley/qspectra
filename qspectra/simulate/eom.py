@@ -1,17 +1,27 @@
 """
-Module for equation of motion based methods
+Equation of motion based methods non-linear spectra and dynamics
 """
-
 import numpy as np
 
-from ..hamiltonian import optional_ensemble_average
-from ..polarization import optional_2nd_order_isotropic_average
+from .decorators import (optional_ensemble_average,
+                         optional_2nd_order_isotropic_average)
 from .utils import integrate
 
 
 @optional_ensemble_average
+def _simulate_dynamics(dynamical_model, initial_state, duration, times,
+                       liouville_subspace, save_func, **integrate_kwargs):
+    eom = dynamical_model.equation_of_motion(liouville_subspace)
+    t = (np.arange(0, duration, dynamical_model.time_step)
+         if times is None else times)
+    states = integrate(eom, initial_state, t, save_func=save_func,
+                       **integrate_kwargs)
+    return (t, states)
+
+
 def simulate_dynamics(dynamical_model, initial_state, duration=None, times=None,
                       liouville_subspace='ee', save_func=None,
+                      ensemble_size=None, ensemble_random_orientations=False,
                       **integrate_kwargs):
     """
     Simulate time evolution with no applied field
@@ -40,8 +50,8 @@ def simulate_dynamics(dynamical_model, initial_state, duration=None, times=None,
     ensemble_random_orientations : boolean, default False
         Whether or not to randomize the orientation of each member of the
         ensemble. Only relevant if `ensemble_size` is set.
-    ensemble_random_seed : int or array of int, optional
-        Random seed for ensemble sampling.
+    **integrate_kwargs : optional
+        Keyword arguments passed on to `integrate`.
 
     Returns
     -------
@@ -50,18 +60,49 @@ def simulate_dynamics(dynamical_model, initial_state, duration=None, times=None,
     states : np.ndarray
         Two-dimensional array of simulated state vectors at all times t.
     """
+    return _simulate_dynamics(
+        dynamical_model, initial_state, duration, times, liouville_subspace,
+        save_func, ensemble_size=ensemble_size,
+        ensemble_random_orientations=ensemble_random_orientations,
+        **integrate_kwargs)
+
+
+# since optional_2nd_order_isotropic_average needs can only be applied *before*
+# optional_ensemble_average, don't apply optional_ensemble_average yet
+def _simulate_with_fields(dynamical_model, pulses, geometry, polarization,
+                          time_extra, times, liouville_subspace, save_func,
+                          **integrate_kwargs):
     eom = dynamical_model.equation_of_motion(liouville_subspace)
-    t = (np.arange(0, duration, dynamical_model.time_step)
-         if times is None else times)
-    states = integrate(eom, initial_state, t, save_func=save_func,
+    V = [dynamical_model.dipole_operator(liouville_subspace, polar, trans)
+         for polar, trans in zip(polarization, geometry)]
+    field_info = zip(pulses, geometry, V)
+
+    def f(t, state):
+        deriv = eom(t, state)
+        for pulse, trans, Vi in field_info:
+            E = pulse(t, dynamical_model.rw_freq)
+            if trans == '+':
+                E = np.conj(E)
+            deriv += (-1j * E) * Vi.commutator(state)
+        return deriv
+
+    initial_state = dynamical_model.ground_state(liouville_subspace)
+
+    t0 = min(p.t_init for p in pulses)
+    tf = max(p.t_final for p in pulses)
+    t = (np.arange(t0, tf + time_extra, dynamical_model.time_step)
+         if times is None else tf + times)
+
+    states = integrate(f, initial_state, t, t0=t0, save_func=save_func,
                        **integrate_kwargs)
     return (t, states)
 
 
-def _simulate_with_fields(dynamical_model, pulses, geometry='-+',
-                          polarization='xx', time_extra=0, times=None,
-                          liouville_subspace='gg,ge,eg,ee', save_func=None,
-                          **integrate_kwargs):
+def simulate_with_fields(dynamical_model, pulses, geometry='-+',
+                         polarization='xx', time_extra=0, times=None,
+                         liouville_subspace='gg,ge,eg,ee', save_func=None,
+                         ensemble_size=None, ensemble_random_orientations=False,
+                         **integrate_kwargs):
     """
     Simulate time evolution under a series of pulses in the rotating wave
     approximation
@@ -101,8 +142,6 @@ def _simulate_with_fields(dynamical_model, pulses, geometry='-+',
     ensemble_random_orientations : boolean, default False
         Whether or not to randomize the orientation of each member of the
         ensemble. Only relevant if `ensemble_size` is set.
-    ensemble_random_seed : int or array of int, optional
-        Random seed for ensemble sampling.
 
     Returns
     -------
@@ -111,41 +150,16 @@ def _simulate_with_fields(dynamical_model, pulses, geometry='-+',
     states : np.ndarray
         Two-dimensional array of simulated state vectors at all times t.
     """
-    eom = dynamical_model.equation_of_motion(liouville_subspace)
-    V = [dynamical_model.dipole_operator(liouville_subspace, polar, trans)
-         for polar, trans in zip(polarization, geometry)]
-    field_info = zip(pulses, geometry, V)
-
-    def f(t, state):
-        deriv = eom(t, state)
-        for pulse, trans, Vi in field_info:
-            E = pulse(t, dynamical_model.rw_freq)
-            if trans == '+':
-                E = np.conj(E)
-            deriv += (-1j * E) * Vi.commutator(state)
-        return deriv
-
-    initial_state = dynamical_model.ground_state(liouville_subspace)
-
-    t0 = min(p.t_init for p in pulses)
-    tf = max(p.t_final for p in pulses)
-    t = (np.arange(t0, tf + time_extra, dynamical_model.time_step)
-         if times is None else tf + times)
-
-    states = integrate(f, initial_state, t, t0=t0, save_func=save_func,
-                       **integrate_kwargs)
-    return (t, states)
+    return optional_ensemble_average(_simulate_with_fields)(
+        dynamical_model, pulses, geometry, polarization, time_extra, times,
+        liouville_subspace, save_func, ensemble_size=ensemble_size,
+        ensemble_random_orientations=ensemble_random_orientations,
+        **integrate_kwargs)
 
 
-# since optional_2nd_order_isotropic_average needs can only be applied *before*
-# optional_ensemble_average, keep around the private version of this function
-# for simulate_pump
-simulate_with_fields = optional_ensemble_average(_simulate_with_fields)
-
-
-@optional_ensemble_average
 def simulate_pump(dynamical_model, pump, polarization='x', time_extra=0,
                   times=None, liouville_subspace='gg,ge,eg,ee', save_func=None,
+                  ensemble_size=None, ensemble_random_orientations=False,
                   exact_isotropic_average=False, **integrate_kwargs):
     """
     Simulate time evolution under a pump field in the rotating wave
@@ -182,14 +196,12 @@ def simulate_pump(dynamical_model, pump, polarization='x', time_extra=0,
     ensemble_random_orientations : boolean, default False
         Whether or not to randomize the orientation of each member of the
         ensemble. Only relevant if `ensemble_size` is set.
-    ensemble_random_seed : int or array of int, optional
-        Random seed for ensemble sampling.
     exact_isotropic_average : boolean, default False
         If True, perform an exact average over all molecular orientations
         (accurate up to 2nd order in the system-field coupling), at cost of 3x
         the computation time.
     **integrate_kwargs : optional
-        Additional keyword arguments are passed to `utils.integrate`.
+        Keyword arguments passed on to `integrate`.
 
     Returns
     -------
@@ -198,8 +210,11 @@ def simulate_pump(dynamical_model, pump, polarization='x', time_extra=0,
     states : np.ndarray
         Two-dimensional array of simulated state vectors at all times t.
     """
-    return optional_2nd_order_isotropic_average(_simulate_with_fields)(
-                dynamical_model, [pump, pump], '-+', [polarization,
-                polarization], time_extra, times, liouville_subspace, save_func,
-                exact_isotropic_average=exact_isotropic_average,
-                **integrate_kwargs)
+    return optional_ensemble_average(
+        optional_2nd_order_isotropic_average(_simulate_with_fields))(
+            dynamical_model, [pump, pump], '-+', [polarization, polarization],
+            time_extra, times, liouville_subspace, save_func,
+            ensemble_size=ensemble_size,
+            ensemble_random_orientations=ensemble_random_orientations,
+            exact_isotropic_average=exact_isotropic_average,
+            **integrate_kwargs)

@@ -62,7 +62,9 @@ class DynamicalModel(object):
         integration routine
 
         If `heisenberg_picture` is True, returns an equation of motion for
-        operators in the Heisenberg picture.
+        operators in the Heisenberg picture. If a dynamical model does not
+        implement an equation of motion in the Heisenberg, it will raise a
+        `NotImplementedError`.
         """
 
     @abstractmethod

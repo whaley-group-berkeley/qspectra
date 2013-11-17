@@ -8,9 +8,9 @@ from dynamics.zofe import ZOFEModel
 from hamiltonian import (Hamiltonian, ElectronicHamiltonian,
                          VibronicHamiltonian)
 from operator_tools import unit_vec, basis_transform, all_states
-from polarization import (polarization_vector, invariant_weights_4th_order,
-                          list_polarizations, FOURTH_ORDER_INVARIANTS,
-                          MAGIC_ANGLE)
+from polarization import (polarization_vector, check_polarizations,
+                          invariant_weights_4th_order, invariant_polarizations,
+                          FOURTH_ORDER_INVARIANTS, MAGIC_ANGLE)
 from pulse import CustomPulse, GaussianPulse
 from simulate.eom import (simulate_dynamics, simulate_with_fields,
                           simulate_pump)
@@ -23,10 +23,12 @@ __all__ = ['DebyeBath', 'ArbitraryBath', 'UncoupledBath', 'PseudomodeBath',
            'CM_FS', 'CM_K', 'GAUSSIAN_SD_FWHM', 'ElectronicHamiltonian',
            'VibronicHamiltonian', 'n_excitations', 'matrix_to_ket_vec',
            'ket_vec_to_matrix', 'matrix_to_bra_vec', 'unit_vec',
-           'basis_transform', 'all_states', 'invariant_weights_4th_order',
-           'FOURTH_ORDER_INVARIANTS', 'CustomPulse', 'GaussianPulse',
-           'RedfieldModel', 'UnitaryModel', 'ZOFEModel', 'simulate_dynamics',
-           'simulate_with_fields', 'simulate_pump', 'linear_response',
-           'absorption_spectra', 'impulsive_probe', 'third_order_response',
-           'PUMP_PROBE_PATHWAYS', 'THIRD_ORDER_PATHWAYS', 'fourier_transform',
-           'integrate', 'bound_signal']
+           'basis_transform', 'all_states', 'polarization_vector',
+           'check_polarizations', 'invariant_weights_4th_order',
+           'invariant_polarizations', 'FOURTH_ORDER_INVARIANTS', 'CustomPulse',
+           'GaussianPulse', 'RedfieldModel', 'UnitaryModel', 'ZOFEModel',
+           'simulate_dynamics', 'simulate_with_fields', 'simulate_pump',
+           'linear_response', 'absorption_spectra', 'impulsive_probe',
+           'third_order_response', 'PUMP_PROBE_PATHWAYS',
+           'THIRD_ORDER_PATHWAYS', 'fourier_transform', 'integrate',
+           'bound_signal']

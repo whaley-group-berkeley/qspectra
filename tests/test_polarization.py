@@ -14,9 +14,9 @@ class TestPolarization(unittest.TestCase):
                      [1, 0, 0])
         assert_allclose(polarization.polarization_vector(pi / 2),
                         [0, 1, 0], atol=1e-10)
-        with self.assertRaises(polarization.PolarizationError):
+        with self.assertRaises(ValueError):
             polarization.polarization_vector('X')
-        with self.assertRaises(polarization.PolarizationError):
+        with self.assertRaises(ValueError):
             polarization.polarization_vector([1, 0])
 
     def test_invariant_weights_4th_order(self):
@@ -50,14 +50,14 @@ class TestPolarization(unittest.TestCase):
         assert_allclose(polarization.invariant_weights_4th_order('xxyy'),
                         polarization.invariant_weights_4th_order('zzyy'))
 
-    def test_list_polarizations(self):
-        with self.assertRaises(polarization.PolarizationError):
-            polarization.list_polarizations(((0, 1), (0, 2)))
+    def test_invariant_polarizations(self):
+        with self.assertRaises(ValueError):
+            polarization.invariant_polarizations(((0, 1), (0, 2)))
         invariants = polarization.FOURTH_ORDER_INVARIANTS
         for invariant in invariants:
-            self.assertEqual(len(polarization.list_polarizations(invariant)),
+            self.assertEqual(len(polarization.invariant_polarizations(invariant)),
                              9)
-        self.assertItemsEqual(polarization.list_polarizations(invariants[0]),
+        self.assertItemsEqual(polarization.invariant_polarizations(invariants[0]),
                               ['xxxx', 'xxyy', 'xxzz',
                                'yyxx', 'yyyy', 'yyzz',
                                'zzxx', 'zzyy', 'zzzz'])
@@ -66,42 +66,3 @@ class TestPolarization(unittest.TestCase):
         M = polarization.random_rotation_matrix()
         self.assertTrue(isinstance(M, np.ndarray))
         self.assertEqual(M.shape, (3, 3))
-
-
-class TestGetCallArgs(unittest.TestCase):
-    def test(self):
-        self.assertEqual(
-            polarization._get_call_args(lambda a: None, 1),
-            {'a': 1})
-        self.assertEqual(
-            polarization._get_call_args(lambda a, **b: None, 1),
-            {'a': 1})
-        self.assertEqual(
-            polarization._get_call_args(lambda a, **b: None, a=1, c=2),
-            {'a': 1, 'c': 2})
-        self.assertEqual(
-            polarization._get_call_args(lambda **b: None, a=1, c=2),
-            {'a': 1, 'c': 2})
-        with self.assertRaises(NotImplementedError):
-            polarization._get_call_args(lambda *a: None, 1, 2, 3)
-
-
-class TestIsotropicAverage(unittest.TestCase):
-    def test_optional_2nd_order_isotropic_average(self):
-        binary = {'xx': 1, 'yy': 2, 'zz': 4}
-        f = polarization.optional_2nd_order_isotropic_average(
-            lambda polarization: (0, binary[polarization]))
-        assert_allclose(f('xx'), (0, 1))
-        assert_allclose(f('xx', exact_isotropic_average=False), (0, 1))
-        assert_allclose(f('xx', exact_isotropic_average=True), (0, 7 / 3.0))
-        assert_allclose(f('xy', exact_isotropic_average=True), (0, 0))
-
-    def test_optional_4th_order_isotropic_average(self):
-        binary = {'xx': 1, 'yy': 2, 'zz': 4}
-        f = polarization.optional_4th_order_isotropic_average(
-            lambda polarization: (0, binary[polarization[:2]]
-                                      + 10 * binary[polarization[2:]]))
-        assert_allclose(f('xxxx'), (0, 11))
-        ma = polarization.MAGIC_ANGLE
-        assert_allclose(f([0, 0, ma, ma], exact_isotropic_average=True),
-                        (0, (11 + 12 + 14 + 21 + 22 + 24 + 41 + 42 + 44) / 9.0))

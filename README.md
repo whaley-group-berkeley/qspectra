@@ -35,6 +35,10 @@ pip install -e qspectra
 I highly recommend using `-e` flag, which keeps the install directory in-place
 for local development.
 
+To view the example notebooks, you need ``IPython>=1.0``. To run the unit tests,
+you need ``nosetests``. The example notebooks can be also be run as tests (see
+the README in that directory for instructions).
+
 Features
 --------
 

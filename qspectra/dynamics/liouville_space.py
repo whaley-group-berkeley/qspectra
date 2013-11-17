@@ -213,7 +213,8 @@ class LiouvilleSpaceModel(DynamicalModel):
 
     @property
     def evolution_super_operator(self):
-        pass
+        raise NotImplementedError('subclass must implement the property '
+                                  '`evolution_super_operator`')
 
     def equation_of_motion(self, liouville_subspace, heisenberg_picture=False):
         """

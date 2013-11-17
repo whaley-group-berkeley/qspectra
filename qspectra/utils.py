@@ -15,7 +15,7 @@ class ZeroArray(object):
 
     It's useful to initialize arrays of all zeros on which to perform inplace
     operations, of course, because it allows for inplace array summations inside
-    a `for` loop, which can be much faster (and simplier) than calling Python's
+    a `for` loop, which can be much faster (and simpler) than calling Python's
     built-in `sum` (which is not inplace).
 
     Example
@@ -57,7 +57,7 @@ class imemoize(object):
     be hashable.
 
     Source (MIT Licensed)
-    --------------------
+    ---------------------
         http://code.activestate.com/recipes/
         577452-a-memoize-decorator-for-instance-methods/
     """
@@ -81,6 +81,18 @@ class imemoize(object):
         except KeyError:
             res = cache[key] = self.func(*args, **kw)
         return res
+
+
+def check_random_state(seed):
+    """Cast seed into a np.random.RandomState object
+
+    If seed is None, return numpy's global RandomState object
+    """
+    if seed is None:
+        return np.random.mtrand._rand
+    if isinstance(seed, np.random.RandomState):
+        return seed
+    return np.random.RandomState(seed)
 
 
 def copy_with_new_cache(obj):
