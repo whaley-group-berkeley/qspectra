@@ -84,6 +84,14 @@ class TestSubspaces(unittest.TestCase):
         self.assertItemsEqual(operator_tools.extract_subspace('gg,ee,ff'),
                               'gef')
 
+    def test_full_liouville_subspace(self):
+        self.assertEqual(operator_tools.full_liouville_subspace('gg'), 'gg')
+        self.assertEqual(operator_tools.full_liouville_subspace('ee'), 'ee')
+        self.assertEqual(operator_tools.full_liouville_subspace('ge,ee'),
+                         'gg,ge,eg,ee')
+        self.assertEqual(operator_tools.full_liouville_subspace('ge,ee,ff'),
+                         'gg,ge,gf,eg,ee,ef,fg,fe,ff')
+
     def test_hilbert_space_index(self):
         self.assertEquals(operator_tools.hilbert_subspace_index('g', 'gef', 3),
                           slice(0, 1))

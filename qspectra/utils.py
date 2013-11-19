@@ -1,5 +1,8 @@
+from collections import OrderedDict
 from copy import copy
 import functools
+import inspect
+
 import numpy as np
 
 
@@ -110,3 +113,26 @@ def copy_with_new_cache(obj):
 
 def memoized_property(x):
     return property(imemoize(x))
+
+
+def inspect_repr(obj):
+    """
+    Returns a sensible `repr` for an object by inspecting the arguments to its
+    `__init__` method. Assumes that each argument is saved as an instance
+    variable.
+    """
+    def wrap_indent(text, start='', length=None):
+        if length is None:
+            length = len(start)
+        indent = '\n' + ' ' * length
+        return start + indent.join(x for x in text.splitlines())
+    # use the arguments to __init__ other than 'self'
+    args = inspect.getargspec(type(obj).__init__).args[1:]
+    # extract repr of each argument, removing direct loops
+    kwargs = OrderedDict((k, (repr(vars(obj)[k]) if vars(obj)[k] is not obj
+                              else '%s(...)' % type(obj).__name__))
+                         for k in args)
+    return wrap_indent(',\n'.join(wrap_indent(v, k + '=')
+                                  for k, v in kwargs.iteritems()),
+                       start='%s(\n    ' % type(obj).__name__,
+                       length=4) + ')'

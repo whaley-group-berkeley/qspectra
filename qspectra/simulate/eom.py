@@ -86,7 +86,7 @@ def _simulate_with_fields(dynamical_model, pulses, geometry, polarization,
             deriv += (-1j * E) * Vi.commutator(state)
         return deriv
 
-    initial_state = dynamical_model.ground_state(liouville_subspace)
+    initial_state = dynamical_model.thermal_state(liouville_subspace)
 
     t0 = min(p.t_init for p in pulses)
     tf = max(p.t_final for p in pulses)

@@ -91,8 +91,8 @@ class ZOFEModel(DynamicalModel):
         return np.append(initial_rho_vec,
                          initial_oop.reshape((-1), order='F'))
 
-    def ground_state(self, _):
-        rho0 = self.hamiltonian.ground_state(self.hilbert_subspace)
+    def thermal_state(self, _):
+        rho0 = self.hamiltonian.thermal_state(self.hilbert_subspace)
         return self.initial_state_and_oop_vec(matrix_to_ket_vec(rho0))
 
     def map_between_subspaces(self, state, from_subspace, to_subspace):
@@ -192,7 +192,6 @@ class ZOFEModel(DynamicalModel):
                   - oop.dot(b_op))
 
         return self.operators_to_state_vec(rhodot, oopdot)
-
 
     def equation_of_motion(self, liouville_subspace, heisenberg_picture=False):
         """

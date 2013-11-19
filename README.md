@@ -58,7 +58,7 @@ Features
         + The density matrix following pump pulses
         + Equation-of-motion phase-matched-approach (EOM-PMA), *in progress*
     - Linear response based methods, such as:
-        + Linear absorption
+        + Absorption and emission spectra
         + Impulsive probe pulses
     - Third-order response functions (in particular, for 2D spectroscopy)
 

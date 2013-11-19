@@ -1,7 +1,8 @@
 from abc import ABCMeta, abstractmethod
 import numpy as np
 
-from constants import GAUSSIAN_SD_FWHM
+from .constants import GAUSSIAN_SD_FWHM
+from .utils import inspect_repr
 
 
 class Pulse(object):
@@ -22,6 +23,9 @@ class Pulse(object):
     """
 
     __metaclass__ = ABCMeta
+
+    def __repr__(self):
+        return inspect_repr(self)
 
     @abstractmethod
     def __call__(self, t, rw_freq):
