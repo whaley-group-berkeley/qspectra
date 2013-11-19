@@ -1,7 +1,7 @@
 import numpy as np
 
 from ..bath import PseudomodeBath
-from .generic import DynamicalModel, SystemOperator
+from .base import DynamicalModel, SystemOperator
 from .liouville_space import matrix_to_ket_vec
 
 

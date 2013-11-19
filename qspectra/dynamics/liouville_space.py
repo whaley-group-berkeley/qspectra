@@ -1,7 +1,7 @@
 import itertools
 import numpy as np
 
-from .generic import DynamicalModel, SystemOperator
+from .base import DynamicalModel, SystemOperator
 from ..operator_tools import (SubspaceError, n_excitations,
                               full_liouville_subspace)
 from ..utils import memoized_property

@@ -1,4 +1,3 @@
-from collections import OrderedDict
 from copy import copy
 import functools
 import inspect
@@ -129,10 +128,8 @@ def inspect_repr(obj):
     # use the arguments to __init__ other than 'self'
     args = inspect.getargspec(type(obj).__init__).args[1:]
     # extract repr of each argument, removing direct loops
-    kwargs = OrderedDict((k, (repr(vars(obj)[k]) if vars(obj)[k] is not obj
-                              else '%s(...)' % type(obj).__name__))
-                         for k in args)
-    return wrap_indent(',\n'.join(wrap_indent(v, k + '=')
-                                  for k, v in kwargs.iteritems()),
-                       start='%s(\n    ' % type(obj).__name__,
-                       length=4) + ')'
+    kwargs = ((k, repr(vars(obj)[k]) if vars(obj)[k] is not obj
+                  else '%s(...)' % type(obj).__name__)
+              for k in args)
+    return wrap_indent(',\n'.join(wrap_indent(v, k + '=') for k, v in kwargs),
+                       start='%s(\n    ' % type(obj).__name__, length=4) + ')'
