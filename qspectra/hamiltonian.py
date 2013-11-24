@@ -92,19 +92,23 @@ class Hamiltonian(object):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self):
+    def __init__(self, energy_spread_extra=None):
+        self.energy_spread_extra = energy_spread_extra
         # keep track of the non-sampled and non-rotating version of this
         # Hamiltonian for the `in_rotating_frame` and `sample` methods:
-        self._not_sampled = self
-        self._not_rotating = self
+        self.not_sampled = self
+        self.not_rotating = self
         # keep track of the rotating wave frequency, so it's possible to check
         # what rotating wave frquency has been set:
-        self._rw_freq = 0
+        self.rw_freq = 0
 
     @property
-    def rw_freq(self):
-        # hide rw_freq in a property to make nobody tries to set it
-        return self._rw_freq
+    def original(self):
+        """
+        Reference to the non-sampled and non-rotating version of this
+        Hamiltonian
+        """
+        return self.not_rotating.not_sampled
 
     def __repr__(self):
         return inspect_repr(self)
@@ -126,10 +130,8 @@ class Hamiltonian(object):
             # TODO: prove that max_depth=1 is sufficient in all cases
             return (not max_depth or
                     (self.rw_freq == other.rw_freq and
-                     self._not_sampled._eq(other._not_sampled,
-                                           max_depth - 1) and
-                     self._not_rotating._eq(other._not_rotating,
-                                            max_depth - 1)))
+                     self.not_sampled._eq(other.not_sampled, max_depth - 1) and
+                     self.not_rotating._eq(other.not_rotating, max_depth - 1)))
 
     def __ne__(self, other):
         return not self == other
@@ -145,7 +147,7 @@ class Hamiltonian(object):
         """
         Returns the ground state of this Hamiltonian as a density operator
         """
-        return ground_state(self._not_rotating.H(subspace))
+        return ground_state(self.not_rotating.H(subspace))
 
     @imemoize
     def thermal_state(self, subspace):
@@ -156,10 +158,10 @@ class Hamiltonian(object):
         temperature is assumed to be zero.
         """
         try:
-            temperature = self._not_rotating.bath.temperature
+            temperature = self.not_rotating.bath.temperature
         except AttributeError:
             temperature = 0
-        return thermal_state(self._not_rotating.H(subspace), temperature)
+        return thermal_state(self.not_rotating.H(subspace), temperature)
 
     @imemoize
     def in_rotating_frame(self, rw_freq=None):
@@ -187,12 +189,12 @@ class Hamiltonian(object):
             New instance of this Hamiltonian type shifted to the rotating frame.
         """
         if rw_freq is None:
-            rw_freq = self._not_rotating._not_sampled.transition_energy
-        ham = self._not_rotating._in_rotating_frame(rw_freq)
-        ham._not_rotating = self._not_rotating
-        if self._not_sampled is not self:
-            ham._not_sampled = self._not_sampled.in_rotating_frame(rw_freq)
-        ham._rw_freq = rw_freq
+            rw_freq = self.original.transition_energy
+        ham = self.not_rotating._in_rotating_frame(rw_freq)
+        ham.not_rotating = self.not_rotating
+        if self.not_sampled is not self:
+            ham.not_sampled = self.not_sampled.in_rotating_frame(rw_freq)
+        ham.rw_freq = rw_freq
         return ham
 
     def _in_rotating_frame(self, rw_freq):
@@ -253,11 +255,11 @@ class Hamiltonian(object):
         """
         if n is None:
             n = np.random.randint(2 ** 30)
-        ham = self._not_sampled._sample(n, random_orientations)
-        if self._not_rotating is not self:
-            ham._not_rotating = self._not_rotating.sample(n, random_orientations)
-        ham._not_sampled = self._not_sampled
-        ham._rw_freq = self._rw_freq
+        ham = self.not_sampled._sample(n, random_orientations)
+        if self.not_rotating is not self:
+            ham.not_rotating = self.not_rotating.sample(n, random_orientations)
+        ham.not_sampled = self.not_sampled
+        ham.rw_freq = self.rw_freq
         return ham
 
     def _sample(self, n, random_orientations):
@@ -335,9 +337,13 @@ class Hamiltonian(object):
         Note: If this frequency is very high, you probably need to transform to
         the rotating frame first.
         """
-        energies = self._not_sampled.E('gef')
-        freq_span = energies.max() - energies.min()
-        return 2 * (freq_span + self.energy_spread_extra)
+        energies = self.not_sampled.E('gef')
+        if self.energy_spread_extra is None:
+            freq_extra = 0.01 * self.original.transition_energy
+        else:
+            freq_extra = self.energy_spread_extra
+        freq_max = max(energies.max(), -energies.min()) + freq_extra
+        return 2 * freq_max
 
     @property
     def time_step(self):
@@ -394,32 +400,32 @@ class ElectronicHamiltonian(Hamiltonian):
         numbers in your custom function. Otherwise, your random ensemble will
         not be reproducible, which may add noise when you calculate ensemble
         averages with the spectroscopy methods.
-    random_seed : int, optional (default 0)
+    random_seed : int, optional
         Random seed used to produce reproducible sampling with the
         `sample_ensemble` method. Must be a non-negative integer or other valid
         input for np.random.RandomState.
-    energy_spread_extra : float, optional (default 100)
+    energy_spread_extra : float, optional
         Default extra frequency to add to the spread of energies when
         determining the frequency step size automatically. To avoid unnecessary
         work when calculating quantities like correlation functions, this
         constant should be set to roughly the width of inhomogeneous broadening
-        or the dephasing rate. Units should match `H_1exc`.
+        or the dephasing rate. Units should match `H_1exc`. By default, this is
+        set to one percent of the average excited state transition energy.
 
     See also
     --------
     np.random.RandomState
     """
     def __init__(self, H_1exc, bath=None, dipoles=None, disorder=None,
-                 random_seed=0, energy_spread_extra=100.0):
+                 random_seed=0, energy_spread_extra=None):
         self.H_1exc = check_hermitian(H_1exc)
         self.bath = bath
         self.dipoles = np.asarray(dipoles) if dipoles is not None else None
         self.disorder = disorder
         self.random_seed = random_seed
-        self.energy_spread_extra = energy_spread_extra
         # used by various dynamics methods to determine indices:
         self.n_vibrational_states = 1
-        super(ElectronicHamiltonian, self).__init__()
+        super(ElectronicHamiltonian, self).__init__(energy_spread_extra)
 
     implements_eq = True
 
@@ -528,9 +534,16 @@ class VibronicHamiltonian(Hamiltonian):
         where |n> is the singly excited electronic state of site n in the full
         singly excited subspace, and b(m) and b(m)^\dagger are the
         vibrational annihilation and creation operators for vibration m.
+    energy_spread_extra : float, optional
+        Default extra frequency to add to the spread of energies when
+        determining the frequency step size automatically. To avoid unnecessary
+        work when calculating quantities like correlation functions, this
+        constant should be set to roughly the width of inhomogeneous broadening
+        or the dephasing rate. Units should match `H_1exc`. By default, this is
+        set to one percent of the average excited state transition energy.
     """
     def __init__(self, electronic, n_vibrational_levels, vib_energies,
-                 elec_vib_couplings):
+                 elec_vib_couplings, energy_spread_extra=None):
         self.electronic = electronic
         self.energy_spread_extra = self.electronic.energy_spread_extra
         self.bath = self.electronic.bath
@@ -538,7 +551,7 @@ class VibronicHamiltonian(Hamiltonian):
         self.n_vibrational_levels = np.asarray(n_vibrational_levels)
         self.vib_energies = np.asarray(vib_energies)
         self.elec_vib_couplings = np.asarray(elec_vib_couplings)
-        super(VibronicHamiltonian, self).__init__()
+        super(VibronicHamiltonian, self).__init__(energy_spread_extra)
 
     implements_eq = True
 
@@ -606,25 +619,15 @@ class VibronicHamiltonian(Hamiltonian):
                 + self.vib_to_sys_operator(self.H_vibrational, subspace)
                 + self.H_electronic_vibrational(subspace))
 
-    @property
-    def transition_energy(self):
-        """
-        A single number estimate of the excited state transition energy
-        """
-        # this property is basically only used to determine default rotating
-        # frame frequencies, so deferring to the electronic sub-system makes
-        # sense if the vibrational energies are large
-        return self.electronic.transition_energy
-
     def _in_rotating_frame(self, rw_freq):
         return type(self)(self.electronic.in_rotating_frame(rw_freq),
                           self.n_vibrational_levels, self.vib_energies,
-                          self.elec_vib_couplings)
+                          self.elec_vib_couplings, self.energy_spread_extra)
 
     def _sample(self, n, random_orientations):
         return type(self)(self.electronic.sample(n, random_orientations),
                           self.n_vibrational_levels, self.vib_energies,
-                          self.elec_vib_couplings)
+                          self.elec_vib_couplings, self.energy_spread_extra)
 
     def el_to_sys_operator(self, el_operator):
         """

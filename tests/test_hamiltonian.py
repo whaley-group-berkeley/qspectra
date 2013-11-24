@@ -35,9 +35,6 @@ class SharedTests(object):
         self.assertNotEqual(H_rw, H_rw2)
         self.assertEqual(H_rw, H_rw.in_rotating_frame(2))
         self.assertEqual(H_rw, H_rw.in_rotating_frame(2).in_rotating_frame(2))
-        with self.assertRaises(AttributeError):
-            # verify that you can't set rw_freq directly
-            self.H_sys.rw_freq = 1
 
     def test_sample(self):
         H_sampled = self.H_sys.sample(0)
@@ -123,7 +120,7 @@ class TestElectronicHamiltonian(unittest.TestCase, SharedTests):
         assert_allclose(H_rw.H('e'), [[-1, 0], [0, 1]])
         self.assertItemsEqual(H_rw.E('gef'), [0, 1, -1, 0])
         self.assertEqual(H_rw.transition_energy, 0)
-        self.assertEqual(H_rw.freq_step, 6.0)
+        self.assertEqual(H_rw.freq_step, 4.0)
         assert_allclose(self.H_sys.in_rotating_frame(3).H('e'),
                         [[-2, 0], [0, 0]])
 
@@ -182,7 +179,7 @@ class TestVibronicHamiltonian(unittest.TestCase, SharedTests):
                          [0, 10, 0, 0],
                          [0, 0, 1, 5],
                          [0, 0, 5, 11]])
-        self.assertAlmostEqual(self.H_sys.transition_energy, 1)
+        self.assertAlmostEqual(self.H_sys.transition_energy, 6)
         assert_allclose(self.H_sys.thermal_state('g'),
                         1 / (1 + np.exp(-5)) * np.diag([1, np.exp(-5)]))
 

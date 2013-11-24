@@ -25,7 +25,7 @@ def _linear_response(dynamical_model, liouv_space_path, time_max,
                 '{}->{}'.format(sub_start, sub_end), polar, trans)
              for sub_start, sub_end, polar, trans
              in zip(subspaces[:-1], subspaces[1:], polarization, '+-')]
-        V_rho2 = np.apply_along_axis(V[0].commutator, -1, initial_state)
+        V_rho0 = np.apply_along_axis(V[0].commutator, -1, initial_state)
         try:
             # attempt to integrate using the Heisenberg picture, since it is
             # much faster if there is more than one initial_state
@@ -34,12 +34,12 @@ def _linear_response(dynamical_model, liouv_space_path, time_max,
         except NotImplementedError:
             # fall back on the Schroedinger picture
             eom = dynamical_model.equation_of_motion(sim_subspace)
-            signal -= integrate(eom, V_rho2, t,
+            signal -= integrate(eom, V_rho0, t,
                                 save_func=V[1].expectation_value,
                                 **integrate_kwargs)
         else:
-            V_Gt3 = integrate(eom, -V[1].bra_vector, t, **integrate_kwargs)
-            signal += np.tensordot(V_rho2, V_Gt3, (-1, -1))
+            V_Gt = integrate(eom, -V[1].bra_vector, t, **integrate_kwargs)
+            signal += np.tensordot(V_rho0, V_Gt, (-1, -1))
     return (t, signal)
 
 
@@ -266,12 +266,15 @@ def _third_order_response(dynamical_model, coherence_time_max,
                           polarization, include_signal, **integrate_kwargs):
     # This is a reasonable first draft. However, there are definitely some
     # significant possible improvements in computational efficiency:
-    # (1) We use the Heisenberg picture to avoid expensive integration loops
+    # (1) When calculating a 2D signal, we could nest the Fourier transform
+    #     inside the 3rd order response calculation so as only to calculate the
+    #     signal at coherence frequencies of interest.
+    # (2) We use the Heisenberg picture to avoid expensive integration loops
     #     only during the third time interval. Could we always use the
     #     Heisenberg picture instead of the Schroedinger picture? In principle,
     #     this could result in speedups of ~50x, since we would no longer need
     #     to loop over different times t1.
-    # (2) Instead of using the `commutator` method of each dipole operator, we
+    # (3) Instead of using the `commutator` method of each dipole operator, we
     #     could use the `left_multiply` or `right_multiply` methods, based on
     #     whether the dipole operator is of creation or annihilation type (as
     #     determined by `geometry`) and whether the change in the density matrix
@@ -281,7 +284,7 @@ def _third_order_response(dynamical_model, coherence_time_max,
     #     save us any time in the integration steps (which are the probably the
     #     most expensive part of the calculation). But something like this might
     #     be necessary to implement (1), in which case it would be worth it.
-    # (3) There are some redundant calculations, because some of the Liouville
+    # (4) There are some redundant calculations, because some of the Liouville
     #     space pathways are equivalent up to or after certain interactions. For
     #     example, all photon-echo pathways start with 'gg->ge', and both GSB
     #     and ESE photon-echo pathways end with 'eg->gg'.
