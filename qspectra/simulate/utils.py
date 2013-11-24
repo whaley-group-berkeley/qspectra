@@ -1,9 +1,8 @@
 """
 Utility functions for producing and manipulating the output of simulations
 """
-from functools import wraps
-
 from numpy import pi
+from scipy.fftpack import fft, fftshift, ifftshift, fftfreq
 import numpy as np
 import scipy.integrate
 
@@ -18,7 +17,7 @@ def _integrate(f, y0, t, t0, method_name, f_params, save_func, **kwargs):
     if t0 is None:
         t0 = t[0]
     if method_name == 'zvode':
-        # this is the method to ode that supports complex values 
+        # this is the method to ode that supports complex values
         solver = scipy.integrate.ode(f)
     else:
         solver = scipy.integrate.complex_ode(f)
@@ -112,17 +111,50 @@ def slice_along_axis(start=None, stop=None, step=None, axis=0, ndim=1):
                  for n in xrange(ndim))
 
 
-def is_constant(x, atol=1e-7):
-    return np.sum(np.abs(x - x[0])) < atol
+def is_constant(x, atol=1e-7, positive=None):
+    x = np.asarray(x)
+    return (np.max(np.abs(x - x[0])) < atol and
+            (np.all((x > 0) == positive) if positive is not None else True))
 
 
-def fourier_transform(t, x, axis=-1, rw_freq=0, unit_convert=1,
-                      reverse_freq=False, positive_time_only=True):
+def _symmetrize(t, x, axis=-1):
+    if not is_constant(np.diff(t), positive=True):
+        raise ValueError('sample times must differ by a positive constant')
+
+    t = np.asarray(t)
+    x = np.asarray(x)
+
+    T = max(t[-1], -t[0])
+    dt = t[1] - t[0]
+
+    N_plus = int((T - t[-1]) / dt) + 1
+    N_minus = int((T + t[0]) / dt) + 1
+
+    t_sym = np.concatenate([t[0] - dt * np.arange(1, N_minus)[::-1], t,
+                           t[-1] + dt * np.arange(1, N_plus)])
+
+    new_shape = tuple(n if i != axis and i != x.ndim + axis
+                      else t_sym.size
+                      for i, n in enumerate(x.shape))
+    x_sym = np.zeros(new_shape, dtype=x.dtype)
+    start, end = (np.searchsorted(t_sym, ti) for ti in (t[0], t[-1]))
+    x_sym[slice_along_axis(start, end + 1, axis=axis, ndim=x.ndim)] = x
+
+    return t_sym, x_sym
+
+
+def fourier_transform(t, x, axis=-1, rw_freq=0, unit_convert=1, sign=1,
+                      convention='angular'):
     """
     Fourier transform a signal defined in a rotating frame using FFT
 
     By default, approximates the integral:
-        X(\omega) = \int e^{i \omega t} x(t)
+    .. math::
+        X(\omega) = \int e^{i (\omega - \omega_0) t} x(t) dt
+
+    where $\omega_0$ is the rotating wave frequency.
+
+    The signal is assumed to be zero at any times at which it is not provided.
 
     Parameters
     ----------
@@ -131,17 +163,15 @@ def fourier_transform(t, x, axis=-1, rw_freq=0, unit_convert=1,
     x : np.ndarray
         Signal to Fourier transform.
     axis : int, optional
-        Axis along which to apply the Fourier transform to `x` (defaults to -1).
+        Axis along which to apply the Fourier transform to `x`.
     rw_freq : number, optional
         Frequency of the rotating frame in which the signal is sampled.
     unit_convert : number, optional
-        Unit conversion from frequency to time units (default 1).
-    reverse_freq : boolean, optional
-        Switch the sign in the exponent from + to -.
-    positive_time_only : boolean, optional
-        If True (default), the signal is assumed to only be defined for at
-        positive times, and the signal is zero-padded on the left with len(x)
-        zeros before passing it to the FFT routine.
+        Unit conversion from frequency to time units.
+    sign : {1, -1}, optional
+        Sign in the exponent.
+    convention : {'angular', 'linear'}, optional
+        Return angular or linear frequencies.
 
     Returns
     -------
@@ -150,29 +180,32 @@ def fourier_transform(t, x, axis=-1, rw_freq=0, unit_convert=1,
     X : np.ndarray
         The Fourier transformed signal.
     """
-    # TODO: update this function so it doesn't need a `positive_time_only`
-    # switch but can enlarge x and t to the right size automatically
-    if not is_constant(np.diff(t)):
-        raise ValueError('Sample times must differ by a constant')
-    if len(t.shape) > 1:
+    if t.ndim != 1:
         raise ValueError('t must be one dimensional')
-    if len(t) != x.shape[axis]:
+    if t.size != x.shape[axis]:
         raise ValueError('t must have the same length as the shape of x along '
                          'the given axis')
+    if sign not in [-1, +1]:
+        raise ValueError
 
-    x_all = (np.concatenate([np.zeros_like(x), x], axis=axis)
-             if positive_time_only else x)
-    x_shifted = np.fft.fftshift(x_all, axes=axis)
+    if convention == 'angular':
+        unit_convert /= 2 * pi
+    elif convention != 'linear':
+        raise ValueError("convention must be 'angular' or 'linear'")
 
-    X = np.fft.fftshift(np.fft.fft(x_shifted, axis=axis), axes=axis)
+    t, x = _symmetrize(t, x, axis)
+
+    N = x.shape[axis]
     dt = t[1] - t[0]
 
-    fft_freqs = np.fft.fftfreq(x_all.shape[axis], dt * unit_convert / (2 * pi))
-    rev = 1 if reverse_freq else -1
-    freqs = rev * np.fft.fftshift(fft_freqs) + rw_freq
+    f = fftshift(fftfreq(N, dt * unit_convert))
+    X = fftshift(fft(ifftshift(x * dt, axes=axis), axis=axis), axes=axis)
 
-    nd_index = slice_along_axis(step=rev, axis=axis, ndim=len(X.shape))
-    return freqs[::rev], X[nd_index]
+    if sign == 1:
+        f = -f[::-1]
+        X = X[slice_along_axis(step=-1, axis=axis, ndim=X.ndim)]
+    f += rw_freq
+    return f, X
 
 
 def bound_signal(ticks, signal, bounds, axis=0):
@@ -202,5 +235,5 @@ def bound_signal(ticks, signal, bounds, axis=0):
         raise ValueError('ticks must have same shape as signal along given '
                          'axis')
     i0, i1 = sorted(np.argmin(np.abs(ticks - bound)) for bound in bounds)
-    nd_index = slice_along_axis(i0, i1 + 1, None, axis, len(signal.shape))
+    nd_index = slice_along_axis(i0, i1 + 1, axis=axis, ndim=len(signal.shape))
     return ticks[i0:(i1 + 1)], signal[nd_index]

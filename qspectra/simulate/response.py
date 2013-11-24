@@ -28,7 +28,7 @@ def _linear_response(dynamical_model, liouv_space_path, time_max,
         V_rho2 = np.apply_along_axis(V[0].commutator, -1, initial_state)
         try:
             # attempt to integrate using the Heisenberg picture, since it is
-            # much faster if there is more than one initial_state 
+            # much faster if there is more than one initial_state
             eom = dynamical_model.equation_of_motion(sim_subspace,
                                                      heisenberg_picture=True)
         except NotImplementedError:

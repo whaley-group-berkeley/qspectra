@@ -24,4 +24,4 @@ class TestRedfieldMonomer(unittest.TestCase):
         dyn2 = RedfieldModel(self.ham, rw_freq=12400,
                              discard_imag_corr=True, unit_convert=CM_FS)
         f2, X2 = absorption_spectra(dyn2, 10000)
-        self.assertAlmostEqual(f2[np.argmax(X2)], 12500, 2)
+        self.assertAlmostEqual(f2[np.argmax(X2)], 12500, 0)
