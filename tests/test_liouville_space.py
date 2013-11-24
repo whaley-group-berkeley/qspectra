@@ -100,10 +100,10 @@ class TestLiouvilleSpaceModel(unittest.TestCase):
     def setUp(self):
         self.model = ExampleLiouvilleSpaceModel(ElectronicHamiltonian(np.eye(4)))
 
-    def test_ground_state(self):
-        assert_allclose(self.model.ground_state('gg'), [1])
-        assert_allclose(self.model.ground_state('gg,eg,ge,ee'), unit_vec(0, 25))
-        assert_allclose(self.model.ground_state('ee'), np.zeros(16))
+    def test_thermal_state(self):
+        assert_allclose(self.model.thermal_state('gg'), [1])
+        assert_allclose(self.model.thermal_state('gg,eg,ge,ee'), unit_vec(0, 25))
+        assert_allclose(self.model.thermal_state('ee'), 0.25 * np.eye(4).reshape(-1))
 
     def test_map_between_subspaces(self):
         assert_allclose(

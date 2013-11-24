@@ -1,8 +1,9 @@
 import itertools
 import numpy as np
 
-from .generic import DynamicalModel, SystemOperator
-from ..operator_tools import SubspaceError, n_excitations
+from .base import DynamicalModel, SystemOperator
+from ..operator_tools import (SubspaceError, n_excitations,
+                              full_liouville_subspace)
 from ..utils import memoized_property
 
 
@@ -206,10 +207,12 @@ class LiouvilleSpaceModel(DynamicalModel):
                                         self.hamiltonian.n_sites,
                                         self.hamiltonian.n_vibrational_states)
 
-    def ground_state(self, liouville_subspace):
-        rho0 = self.hamiltonian.ground_state(self.hilbert_subspace)
-        index = self.liouville_subspace_index(liouville_subspace)
-        return matrix_to_ket_vec(rho0)[index]
+    def thermal_state(self, liouville_subspace):
+        rho0 = self.hamiltonian.thermal_state(liouville_subspace)
+        state0 = matrix_to_ket_vec(rho0)
+        return self.map_between_subspaces(
+            state0, full_liouville_subspace(liouville_subspace),
+            liouville_subspace)
 
     @property
     def evolution_super_operator(self):

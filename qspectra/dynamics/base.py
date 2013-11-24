@@ -1,7 +1,7 @@
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABCMeta, abstractmethod
 
 from ..operator_tools import hilbert_subspace_index
-from ..utils import copy_with_new_cache
+from ..utils import copy_with_new_cache, inspect_repr
 
 
 class DynamicalModel(object):
@@ -43,14 +43,17 @@ class DynamicalModel(object):
             Unit conversion from energy to time units (default 1).
         """
         self.hamiltonian = hamiltonian.in_rotating_frame(rw_freq)
-        self.rw_freq = self.hamiltonian.energy_offset
+        self.rw_freq = self.hamiltonian.rw_freq
         self.hilbert_subspace = hilbert_subspace
         self.unit_convert = unit_convert
 
+    def __repr__(self):
+        return inspect_repr(self)
+
     @abstractmethod
-    def ground_state(self, liouville_subspace):
+    def thermal_state(self, liouville_subspace):
         """
-        Ground state for this dynamical model
+        Thermal state for this dynamical model
         """
 
     @abstractmethod

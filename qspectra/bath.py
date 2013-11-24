@@ -2,6 +2,8 @@
 import numpy as np
 from numpy import pi, tan, exp
 
+from .utils import inspect_repr
+
 
 class Bath(object):
     """
@@ -34,6 +36,9 @@ class Bath(object):
     #         return T * J0
     #     else:
     #         return (n(x) + 1) * J_anti(x)
+
+    def __repr__(self):
+        return inspect_repr(self)
 
     def spectral_density_func(self, x):
         """

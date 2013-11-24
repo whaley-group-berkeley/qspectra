@@ -234,12 +234,27 @@ def n_excitations(n_sites=1, n_vibrational_states=1):
     return n_exc * n_vibrational_states
 
 
+def excitation_to_number(excitation):
+    return {'g': 0, 'e': 1, 'f': 2}[excitation]
+
+
 def extract_subspace(subspaces_string):
     """
     Given a string a subspace in Liouville space or a mapping between subspaces,
     returns the minimal containing Hilbert space subspace
     """
-    return set(subspaces_string) - {',', '-', '>'}
+    return sorted(set(subspaces_string) - {',', '-', '>'},
+                  key=excitation_to_number)
+
+
+def full_liouville_subspace(subspaces_string):
+    """
+    Given a string a subspace in Liouville space or a mapping between subspaces,
+    returns the Liouville subspace equal to the tensor product of all
+    contained Hilbert space subspaces
+    """
+    hilbert_subspaces = extract_subspace(subspaces_string)
+    return ','.join(a + b for a in hilbert_subspaces for b in hilbert_subspaces)
 
 
 def hilbert_subspace_index(subspace, all_subspaces, n_sites,

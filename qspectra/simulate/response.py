@@ -16,7 +16,7 @@ def _linear_response(dynamical_model, liouv_space_path, time_max,
                      initial_state=None, polarization='xx', **integrate_kwargs):
     subspaces = liouv_space_path.split('->')
     if initial_state is None:
-        initial_state = dynamical_model.ground_state(subspaces[0])
+        initial_state = dynamical_model.thermal_state(subspaces[0])
 
     t = np.arange(0, time_max, dynamical_model.time_step)
     signal = ZeroArray()
@@ -28,7 +28,7 @@ def _linear_response(dynamical_model, liouv_space_path, time_max,
         V_rho2 = np.apply_along_axis(V[0].commutator, -1, initial_state)
         try:
             # attempt to integrate using the Heisenberg picture, since it is
-            # much faster if there is more than one initial_state 
+            # much faster if there is more than one initial_state
             eom = dynamical_model.equation_of_motion(sim_subspace,
                                                      heisenberg_picture=True)
         except NotImplementedError:
@@ -63,7 +63,7 @@ def linear_response(dynamical_model, liouv_space_path, time_max,
     initial_state : np.ndarray, optional
         Initial condition(s) for the state vector, which should be defined on
         the first Liouville subspace in `liouv_space_path`. Defaults to the
-        ground state of the dynamical model.
+        thermal state of the dynamical model.
     polarization : pair of polarizations, optional
         Valid polarizations include:
         - 'x', 'y' or 'z', interepreted as the respective unit vectors
@@ -220,7 +220,7 @@ def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
         One-dimensional array containing the simulated complex valued electric
         field of the signal in the frequency domain.
     """
-    initial_state = state - dynamical_model.ground_state(initial_liouv_subspace)
+    initial_state = state - dynamical_model.thermal_state(initial_liouv_subspace)
     total_signal = ZeroArray()
 
     selected_pathways = _parse_pathways(PUMP_PROBE_PATHWAYS, include_signal)
@@ -293,7 +293,7 @@ def _third_order_response(dynamical_model, coherence_time_max,
         t2 = population_times
     t3 = np.arange(0, coherence_time_max, dynamical_model.time_step)
 
-    initial_state = dynamical_model.ground_state('gg')
+    initial_state = dynamical_model.thermal_state('gg')
     total_signal = ZeroArray()
 
     selected_pathways = _parse_pathways(THIRD_ORDER_PATHWAYS[geometry],

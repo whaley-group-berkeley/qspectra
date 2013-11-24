@@ -1,6 +1,7 @@
 # TODO: to improve extendability, move this file into separate subfolder
 from abc import ABCMeta, abstractmethod
 from numbers import Number
+import warnings
 
 import numpy as np
 import scipy.linalg
@@ -10,7 +11,70 @@ from .operator_tools import (transition_operator, operator_extend, unit_vec,
                              tensor, extend_vib_operator, vib_create,
                              vib_annihilate)
 from .polarization import polarization_vector, random_rotation_matrix
-from .utils import imemoize, memoized_property, check_random_state
+from .utils import imemoize, memoized_property, check_random_state, inspect_repr
+
+
+def check_hermitian(matrix):
+    matrix = np.asarray(matrix)
+    if not np.allclose(matrix.conj().T, matrix):
+        raise ValueError('matrix input must to be Hermitian')
+    return matrix
+
+
+def ground_state(hamiltonian_matrix):
+    """
+    Given a Hamiltonian in matrix form, return its ground state
+
+    Parameters
+    ----------
+    hamiltonian_matrix : np.ndarray
+        Hamiltonian as an explicit matrix
+
+    Returns
+    -------
+    rho : np.ndarray
+        Density matrix for the ground state
+    """
+    E, U = scipy.linalg.eigh(hamiltonian_matrix)
+    # note: U will be real valued, since H is hermitian, so there is no need to
+    # use np.conj()
+    # also note: the energies E from eigh are sorted in ascending order, so we
+    # know that E[0] is the minimum
+    rho = np.mean([np.outer(U[:, i], U[:, i]) for i in xrange(len(U))
+                   if E[i] == E[0]], axis=0)
+    return rho.astype(complex)
+
+
+def thermal_state(hamiltonian_matrix, temperature):
+    """
+    Given a Hamiltonian in matrix form and a temperature, return the thermal
+    density matrix
+
+    Parameters
+    ----------
+    hamiltonian_matrix : np.ndarray
+        Hamiltonian as an explicit matrix
+    temperature : float
+        Bath temperature, in the same units as the Hamiltonian
+
+    Returns
+    -------
+    rho : np.ndarray
+        Density matrix for thermal equilibrium
+    """
+    if temperature > 0:
+        hamiltonian_matrix = np.asarray(hamiltonian_matrix)
+        rho = scipy.linalg.expm(-hamiltonian_matrix / float(temperature))
+        trace = np.trace(rho)
+        if trace == 0:
+            raise OverflowError(('temperature=%s too low to reliably calculate '
+                                 'thermal_state; raise it or set it to zero '
+                                 '(in which case ground_state is substituted')
+                                 % temperature)
+        rho /= trace
+    else:
+        rho = ground_state(hamiltonian_matrix)
+    return rho.astype(complex)
 
 
 class HamiltonianError(Exception):
@@ -18,34 +82,57 @@ class HamiltonianError(Exception):
     Error class for Hamiltonian errors
     """
 
+
 class Hamiltonian(object):
     """
     Parent class for Hamiltonian objects
+
+    At a minimum, subclasses should implement a new `H` method which returns the
+    Hamiltonian as an explicit matrix.
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, energy_offset_source=None):
-        # used to keep track of the original, unperturbed Hamiltonian even
-        # after calling `sample_ensemble`:
-        self.ref_system = self
-        # used to keep track of original transition energies even after
-        # transforming to a rotating frame:
-        if energy_offset_source is None:
-            self._energy_offset = 0
-            self._energy_offset_source = self 
-        else:
-            self._energy_offset_source = energy_offset_source
+    def __init__(self):
+        # keep track of the non-sampled and non-rotating version of this
+        # Hamiltonian for the `in_rotating_frame` and `sample` methods:
+        self._not_sampled = self
+        self._not_rotating = self
+        # keep track of the rotating wave frequency, so it's possible to check
+        # what rotating wave frquency has been set:
+        self._rw_freq = 0
 
     @property
-    def energy_offset(self):
-        return self._energy_offset_source._energy_offset
+    def rw_freq(self):
+        # hide rw_freq in a property to make nobody tries to set it
+        return self._rw_freq
 
-    @energy_offset.setter
-    def energy_offset(self, value):
-        if self._energy_offset_source is not self:
-            raise HamiltonianError('cannot set `energy_offset` for this '
-                                   'Hamiltonian directly')
-        self._energy_offset = value
+    def __repr__(self):
+        return inspect_repr(self)
+
+    def __eq__(self, other):
+        return self._eq(other, max_depth=1)
+
+    # set this to True if a subclass implements a meaningful `_eq` method
+    implements_eq = False
+
+    def _eq(self, other, max_depth):
+        if not self.implements_eq:
+            # fall back on comparison by memory address; otherwise, by default
+            # _eq thinks all subclass Hamiltonians are equal
+            return self is other
+        else:
+            # recursively check reference Hamiltonians for for equality until
+            # max_depth is 0, at which point assume equality
+            # TODO: prove that max_depth=1 is sufficient in all cases
+            return (not max_depth or
+                    (self.rw_freq == other.rw_freq and
+                     self._not_sampled._eq(other._not_sampled,
+                                           max_depth - 1) and
+                     self._not_rotating._eq(other._not_rotating,
+                                            max_depth - 1)))
+
+    def __ne__(self, other):
+        return not self == other
 
     @abstractmethod
     def H(self, subspace):
@@ -53,36 +140,156 @@ class Hamiltonian(object):
         Returns the system Hamiltonian in the given Hilbert subspace as a matrix
         """
 
-    @abstractmethod
+    @imemoize
     def ground_state(self, subspace):
         """
-        Returns the ground electronic state of this Hamiltonian as a density
-        operator
+        Returns the ground state of this Hamiltonian as a density operator
         """
+        return ground_state(self._not_rotating.H(subspace))
 
-    @abstractmethod
+    @imemoize
+    def thermal_state(self, subspace):
+        """
+        Returns the thermal state of this Hamiltonian as a density operator
+
+        If there is no bath or the bath does not define a temperature, the
+        temperature is assumed to be zero.
+        """
+        try:
+            temperature = self._not_rotating.bath.temperature
+        except AttributeError:
+            temperature = 0
+        return thermal_state(self._not_rotating.H(subspace), temperature)
+
+    @imemoize
     def in_rotating_frame(self, rw_freq=None):
         """
         Returns a new Hamiltonian shifted to the rotating frame at the given
         frequency
 
-        By default, sets the rotating frame to the central frequency.
-        """
+        This method is idempotent: applying it twice will return the
+        same Hamiltonian as applying it once.
 
-    @abstractmethod
+        Note: The `in_rotating_frame` and `sample` methods are designed
+        carefully so that they commute -- it should not matter in which order
+        they are applied.
+
+        Parameters
+        ----------
+        rw_freq : float, optional
+            Frequency of the rotating frame to which to transformation this
+            Hamiltonian. By default, sets the rotating frame frequency to the
+            transition energy.
+
+        Returns
+        -------
+        ham : Hamiltonian
+            New instance of this Hamiltonian type shifted to the rotating frame.
+        """
+        if rw_freq is None:
+            rw_freq = self._not_rotating._not_sampled.transition_energy
+        ham = self._not_rotating._in_rotating_frame(rw_freq)
+        ham._not_rotating = self._not_rotating
+        if self._not_sampled is not self:
+            ham._not_sampled = self._not_sampled.in_rotating_frame(rw_freq)
+        ham._rw_freq = rw_freq
+        return ham
+
+    def _in_rotating_frame(self, rw_freq):
+        """
+        Override this method to implement rotating frame transformations for
+        this Hamiltonian.
+
+        Don't call this method directly: use `in_rotating_frame` instead, which
+        takes care of some important book-keeping.
+        """
+        raise NotImplementedError(('%s does not implement rotating frame '
+                                   'transformations') % type(self).__name__)
+
+    def sample_ensemble(self, ensemble_size=1, random_orientations=False):
+        """
+        Yields `ensemble_size` samplings of this Hamiltonian over static
+        disorder
+
+        Note: The ensemble returned by this method is not stochastic. The first
+        n ensemble members will always be the same.
+        """
+        for n in xrange(ensemble_size):
+            yield self.sample(n, random_orientations)
+
+    def sample(self, n=None, random_orientations=False):
+        """
+        Produce the nth sampled Hamiltonian over static disorder
+
+        Each re-sampled Hamiltonian is another valid Hamiltonian, except
+        its default rotating wave frequency, time step and frequency step all
+        match the parent Hamiltonian. This guarantees that all the time and
+        frequency ticks match between different ensemble members sampled from
+        the same Hamiltonian.
+
+        If you resample a Hamiltonian produced by this method, it will add the
+        static disorder to the original Hamiltonian. Thus this method is
+        idempotent in a particular sense: the distribution of Hamiltonians
+        sampled from sampled Hamiltonians is equivalent to the distribution
+        of Hamiltonians sampled directly (although of course the particular
+        ensemble members will be different).
+
+        Note: The `in_rotating_frame` and `sample` methods are designed
+        carefully so that they commute -- it should not matter in which order
+        they are applied.
+
+        Parameters
+        ----------
+        n : int, optional
+            Number to identify the desired ensemble member. By default, this
+            number is chosen at random.
+        random_orientations : bool, optional
+            If True, randomized the orientation of of the sampled Hamiltonian.
+
+        Returns
+        -------
+        ham : Hamiltonian
+            New instance of this Hamiltonian type sampled over static disorder
+        """
+        if n is None:
+            n = np.random.randint(2 ** 30)
+        ham = self._not_sampled._sample(n, random_orientations)
+        if self._not_rotating is not self:
+            ham._not_rotating = self._not_rotating.sample(n, random_orientations)
+        ham._not_sampled = self._not_sampled
+        ham._rw_freq = self._rw_freq
+        return ham
+
+    def _sample(self, n, random_orientations):
+        """
+        Override this method to implement sampling over static disorder for this
+        Hamiltonian
+
+        Don't call this method directly: use `sample` instead, which takes care
+        of some important book-keeping.
+
+        Note: This method should be not stochastic! Use a random seed so that
+        the nth sampled Hamiltonian is always the same.
+        """
+        raise NotImplementedError('%s does not implement ensemble sampling'
+                                  % type(self).__name__)
+
     def dipole_operator(self, subspace='gef', polarization='x',
                         transitions='-+'):
         """
         Return the matrix representation in the given subspace of the requested
         dipole operator
         """
+        raise NotImplementedError('%s does not implement dipole operators'
+                                  % type(self).__name__)
 
-    @abstractmethod
     def system_bath_couplings(self, subspace='gef'):
         """
         Return a list of matrix representations in the given subspace of the
         system-bath coupling operators
         """
+        raise NotImplementedError('%s does not implement system-bath couplings'
+                                  % type(self).__name__)
 
     def n_states(self, subspace):
         return len(self.H(subspace))
@@ -99,24 +306,23 @@ class Hamiltonian(object):
     def E(self, subspace):
         """
         Returns the eigen-energies of the system part of this Hamiltonian in the
-        given subspace
+        given subspace, in ascending order
         """
         return self.eig(subspace)[0]
 
     def U(self, subspace):
         """
         Returns the matrix which transform the system part of this Hamiltonian
-        from the site to the energy eigen-basis.
+        from the site to the energy eigen-basis
         """
         return self.eig(subspace)[1]
 
     @property
-    def mean_excitation_freq(self):
+    def transition_energy(self):
         """
-        Average excited state transition energy
+        A single number estimate of the excited state transition energy
         """
-        # should remain fixed under sampling and rotating frame transformations
-        return np.mean(self.ref_system.E('e')) + self.ref_system.energy_offset
+        return np.mean(self.E('e'))
 
     @property
     def freq_step(self):
@@ -124,12 +330,12 @@ class Hamiltonian(object):
         An appropriate sampling rate, according to the Nyquist theorem, so that
         all frequencies of the Hamiltonian can be resolved
 
+        This property remains fixed under ensemble sampling.
+
         Note: If this frequency is very high, you probably need to transform to
         the rotating frame first.
         """
-        # should remain fixed under sampling but NOT under rotating frame
-        # transformations
-        energies = self.ref_system.E('gef')
+        energies = self._not_sampled.E('gef')
         freq_span = energies.max() - energies.min()
         return 2 * (freq_span + self.energy_spread_extra)
 
@@ -138,6 +344,8 @@ class Hamiltonian(object):
         """
         An appropriate sampling time step, according to the Nyquist theorem, so
         that all frequencies of the Hamiltonian can be resolved
+
+        This property remains fixed under ensemble sampling.
 
         Note: If this time-step is very short, you probably need to transform to
         the rotating frame first.
@@ -150,7 +358,7 @@ def diagonal_gaussian_disorder(fwhm, n_sites):
         return np.diag((fwhm * GAUSSIAN_SD_FWHM) * random_state.randn(n_sites))
     return disorder
 
- 
+
 class ElectronicHamiltonian(Hamiltonian):
     """
     Hamiltonian for an electronic system with coupling to an external field
@@ -203,7 +411,7 @@ class ElectronicHamiltonian(Hamiltonian):
     """
     def __init__(self, H_1exc, bath=None, dipoles=None, disorder=None,
                  random_seed=0, energy_spread_extra=100.0):
-        self.H_1exc = np.asarray(H_1exc)
+        self.H_1exc = check_hermitian(H_1exc)
         self.bath = bath
         self.dipoles = np.asarray(dipoles) if dipoles is not None else None
         self.disorder = disorder
@@ -212,6 +420,17 @@ class ElectronicHamiltonian(Hamiltonian):
         # used by various dynamics methods to determine indices:
         self.n_vibrational_states = 1
         super(ElectronicHamiltonian, self).__init__()
+
+    implements_eq = True
+
+    def _eq(self, other, max_depth):
+        return (np.all(self.H_1exc == other.H_1exc) and
+                self.bath == other.bath and
+                np.all(self.dipoles == other.dipoles) and
+                self.disorder == other.disorder and
+                self.random_seed == other.random_seed and
+                self.energy_spread_extra == other.energy_spread_extra and
+                super(ElectronicHamiltonian, self)._eq(other, max_depth))
 
     @property
     def n_sites(self):
@@ -224,84 +443,37 @@ class ElectronicHamiltonian(Hamiltonian):
         """
         return operator_extend(self.H_1exc, subspace)
 
-    @imemoize
-    def ground_state(self, subspace):
-        """
-        Returns the ground electronic state of this Hamiltonian as a density
-        operator
-        """
-        N = self.n_states(subspace)
-        state = np.zeros((N, N), dtype=complex)
-        if 'g' in subspace:
-            state[0, 0] = 1.0
-        return state
+    def _in_rotating_frame(self, rw_freq):
+        H_1exc = self.H_1exc - rw_freq * np.identity(self.n_sites)
+        return type(self)(H_1exc, self.bath, self.dipoles, self.disorder,
+                          self.random_seed, self.energy_spread_extra)
 
-    @imemoize
-    def in_rotating_frame(self, rw_freq=None):
-        """
-        Returns a new Hamiltonian shifted to the rotating frame at the given
-        frequency
-
-        By default, sets the rotating frame frequency to the mean excitation
-        frequency. This method is idempotent: applying it twice will return the
-        same Hamiltonian as applying it once.
-
-        Note: The `in_rotating_frame` and `sample_ensemble` methods are designed
-        carefully so that they commute -- it should not matter in which order
-        they are applied.
-        """
-        if rw_freq is None:
-            rw_freq = self.mean_excitation_freq
-        H_1exc = self.H_1exc - ((rw_freq - self.energy_offset)
-                                * np.identity(len(self.H_1exc)))
-        ham = type(self)(H_1exc, self.bath, self.dipoles, self.disorder,
-                         self.random_seed, self.energy_spread_extra)
-        ham.energy_offset = rw_freq
-        if self.ref_system is not self:
-            ham.ref_system = self.ref_system.in_rotating_frame(rw_freq)
-        return ham
-
-    def sample_ensemble(self, ensemble_size=1, random_orientations=False):
-        """
-        Yields `ensemble_size` re-samplings of this Hamiltonian over disorder
-
-        Each re-sampled Hamiltonian is another valid Hamiltonian, except
-        its default rotating wave frequency, time step and frequency step all
-        match the parent Hamiltonian. This guarantees that all the time and
-        frequency ticks match when simulating an ensemble generated from this
-        method.
-
-        Hamiltonians produced by this method have disorder set to `None`, so
-        if you use their `sample_ensemble` method, you will not produce any
-        additional static disorder, although you could randomize their
-        orientations.
-
-        Note: The `in_rotating_frame` and `sample_ensemble` methods are designed
-        carefully so that they commute -- it should not matter in which order
-        they are applied.
-        """
+    def _sample(self, n, random_orientations):
         if self.disorder is None:
+            if not random_orientations:
+                warnings.warn('called sample with `disorder=None` and '
+                              '`random_orientations=False`: sampled '
+                              'Hamiltonian is identical to original',
+                              RuntimeWarning, stacklevel=2)
             disorder_func = lambda x: 0
         elif isinstance(self.disorder, Number):
             disorder_func = diagonal_gaussian_disorder(self.disorder,
                                                        self.n_sites)
         else:
             disorder_func = self.disorder
-        seed = list(np.atleast_1d(self.random_seed))
-        for n in xrange(ensemble_size):
-            random_state = check_random_state(seed + [n])
-            H_1exc = self.H_1exc + disorder_func(random_state)
-            if random_orientations:
-                dipoles = np.einsum('mn,in->im',
-                                    random_rotation_matrix(random_state),
-                                    self.dipoles)
-            else:
-                dipoles = self.dipoles
-            # note: sampled Hamiltonians should have no static disorder
-            ham = type(self)(H_1exc, self.bath, dipoles, None, None,
-                             self.energy_spread_extra)
-            ham.ref_system = self
-            yield ham
+
+        random_seed = list(np.atleast_1d(self.random_seed)) + [n]
+        random_state = check_random_state(random_seed)
+
+        H_1exc = self.H_1exc + disorder_func(random_state)
+        if random_orientations:
+            dipoles = np.einsum('mn,in->im',
+                                random_rotation_matrix(random_state),
+                                self.dipoles)
+        else:
+            dipoles = self.dipoles
+        return type(self)(H_1exc, self.bath, dipoles, self.disorder,
+                          random_seed, self.energy_spread_extra)
 
     def dipole_operator(self, subspace='gef', polarization='x',
                         transitions='-+'):
@@ -332,27 +504,6 @@ class ElectronicHamiltonian(Hamiltonian):
             raise HamiltonianError('bath undefined')
         return np.array([self.number_operator(n, subspace)
                          for n in xrange(self.n_sites)])
-
-
-def thermal_state(hamiltonian_matrix, temperature):
-    """
-    Given a Hamiltonian in matrix form and a temperature, return the thermal
-    density matrix
-
-    Parameters
-    ----------
-    hamiltonian_matrix : np.ndarray
-        Hamiltonian as an explicit matrix
-    temperature : float
-        Bath temperature, in the same units as the Hamiltonian
-
-    Returns
-    -------
-    rho : np.ndarray
-        Density matrix for thermal equilibrium
-    """
-    rho = scipy.linalg.expm(-hamiltonian_matrix / temperature)
-    return rho / np.trace(rho)
 
 
 class VibronicHamiltonian(Hamiltonian):
@@ -387,7 +538,17 @@ class VibronicHamiltonian(Hamiltonian):
         self.n_vibrational_levels = np.asarray(n_vibrational_levels)
         self.vib_energies = np.asarray(vib_energies)
         self.elec_vib_couplings = np.asarray(elec_vib_couplings)
-        super(VibronicHamiltonian, self).__init__(self.electronic)
+        super(VibronicHamiltonian, self).__init__()
+
+    implements_eq = True
+
+    def _eq(self, other, max_depth):
+        return (self.electronic == other.electronic and
+                np.all(self.n_vibrational_levels ==
+                       other.n_vibrational_levels) and
+                np.all(self.vib_energies == other.vib_energies) and
+                np.all(self.elec_vib_couplings == other.elec_vib_couplings) and
+                super(VibronicHamiltonian, self)._eq(other, max_depth))
 
     @memoized_property
     def n_vibrational_states(self):
@@ -445,41 +606,25 @@ class VibronicHamiltonian(Hamiltonian):
                 + self.vib_to_sys_operator(self.H_vibrational, subspace)
                 + self.H_electronic_vibrational(subspace))
 
-    @imemoize
-    def ground_state(self, subspace='gef'):
-        if self.bath is None:
-            raise HamiltonianError('bath needs to be defined determine the '
-                                   'equilibrium density matrix in the '
-                                   'electronic ground state')
-        return np.kron(self.electronic.ground_state(subspace),
-                       thermal_state(self.H_vibrational,
-                                     self.bath.temperature))
-
-    @imemoize
-    def in_rotating_frame(self, rw_freq=None):
+    @property
+    def transition_energy(self):
         """
-        Returns a new Hamiltonian shifted to the rotating frame at the given
-        frequency
-
-        By default, sets the rotating frame frequency to the mean excitation
-        frequency of the electronic part of the Hamiltonian.
+        A single number estimate of the excited state transition energy
         """
+        # this property is basically only used to determine default rotating
+        # frame frequencies, so deferring to the electronic sub-system makes
+        # sense if the vibrational energies are large
+        return self.electronic.transition_energy
+
+    def _in_rotating_frame(self, rw_freq):
         return type(self)(self.electronic.in_rotating_frame(rw_freq),
                           self.n_vibrational_levels, self.vib_energies,
                           self.elec_vib_couplings)
 
-    def sample_ensemble(self, *args, **kwargs):
-        """
-        Yields `ensemble_size` re-samplings of this Hamiltonian over disorder
-
-        Passes on all arguments to the contained electronic Hamiltonian; each
-        re-sampling replaces the electronic Hamiltonian.
-        """
-        for elec in self.electronic.sample_ensemble(*args, **kwargs):
-            ham = type(self)(elec, self.n_vibrational_levels, self.vib_energies,
-                             self.elec_vib_couplings)
-            ham.ref_system = self
-            yield ham
+    def _sample(self, n, random_orientations):
+        return type(self)(self.electronic.sample(n, random_orientations),
+                          self.n_vibrational_levels, self.vib_energies,
+                          self.elec_vib_couplings)
 
     def el_to_sys_operator(self, el_operator):
         """
