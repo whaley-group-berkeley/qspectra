@@ -1,6 +1,6 @@
 """Defines Bath classes to use in Hamiltonians"""
 import numpy as np
-from numpy import pi, tan, exp
+from numpy import pi, tan
 
 from .utils import inspect_repr
 
@@ -14,28 +14,21 @@ class Bath(object):
     spectral_density : SpectralDensity
         Spectral density of the bath.
     """
-    # # there seems to be some sort of bug in this method...
-    # def corr_func_real(self, x):
-    #     """
-    #     Correlation function
-    #     """
+    def corr_func_real(self, x):
+        T = self.temperature
+        J = self.spectral_density_func
+        J0 = self.spectral_density_limit_at_zero
 
-    #     T = self.temperature
-    #     J = self.spectral_density_func
-    #     J0 = self.spectral_density_limit_at_zero
+        def n(x):
+            return 1 / np.expm1(x / T)
 
-    #  should use np.exp1m instead?
-    #     def n(x):
-    #         return 1 / np.exp1m(-x / T)
-    #         return 1 / (exp(x / T) - 1)
+        def J_anti(x):
+            return J(x) if x >= 0 else -J(-x)
 
-    #     def J_anti(x):
-    #         return J(x) if x >= 0 else -J(-x)
-
-    #     if x == 0:
-    #         return T * J0
-    #     else:
-    #         return (n(x) + 1) * J_anti(x)
+        if x == 0:
+            return T * J0
+        else:
+            return (n(x) + 1) * J_anti(x)
 
     def __repr__(self):
         return inspect_repr(self)
@@ -76,9 +69,9 @@ class UncoupledBath(Bath):
 
 class DebyeBath(Bath):
     def __init__(self, temperature, reorg_energy, cutoff_freq):
-        self.temperature = temperature
-        self.reorg_energy = reorg_energy
-        self.cutoff_freq = cutoff_freq
+        self.temperature = float(temperature)
+        self.reorg_energy = float(reorg_energy)
+        self.cutoff_freq = float(cutoff_freq)
 
     def spectral_density_func(self, x):
         return (2 * self.reorg_energy * self.cutoff_freq * x
@@ -87,10 +80,6 @@ class DebyeBath(Bath):
     @property
     def spectral_density_limit_at_zero(self):
         return 2 * self.reorg_energy / self.cutoff_freq
-
-    def corr_func_real(self, x):
-        # temporary method until Bath.corr_func_real gets fixed
-        return self.corr_func_complex(x).real
 
     def corr_func_complex(self, x, matsubara_cutoff=1000):
         """
@@ -145,5 +134,5 @@ class PseudomodeBath(Bath):
         self.Omega = Omega
         self.gamma = gamma
         self.huang = huang
-        
-        
+
+
