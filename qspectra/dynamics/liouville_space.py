@@ -133,22 +133,22 @@ def super_right_matrix(operator):
 
 
 class LiouvilleSpaceOperator(SystemOperator):
+    """
+    Parameters
+    ----------
+    operator : np.ndarray
+        Matrix representation of the operator in the Hilbert subspace of
+        `dynamical_model`.
+    liouv_subspace_map : string
+        String in the form 'eg,fe->gg,ee' indicating the mapping between
+        Liouville subspaces on which the operator should act. Optionally,
+        only one Liouville subspace may be provided (e.g., a string of the
+        form 'eg,fe'), in which case the super operator is assumed to map
+        from and to the same subspace.
+    dynamical_model : LiouvilleSpaceModel
+        The dynamical model on which this operator acts.
+    """
     def __init__(self, operator, liouv_subspace_map, dynamical_model):
-        """
-        Parameters
-        ----------
-        operator : np.ndarray
-            Matrix representation of the operator in the Hilbert subspace of
-            `dynamical_model`.
-        liouv_subspace_map : string
-            String in the form 'eg,fe->gg,ee' indicating the mapping between
-            Liouville subspaces on which the operator should act. Optionally,
-            only one Liouville subspace may be provided (e.g., a string of the
-            form 'eg,fe'), in which case the super operator is assumed to map
-            from and to the same subspace.
-        dynamical_model : LiouvilleSpaceModel
-            The dynamical model on which this operator acts.
-        """
         self.operator = operator
         liouv_subspaces = (liouv_subspace_map.split('->')
                            if '->' in liouv_subspace_map

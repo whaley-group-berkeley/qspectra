@@ -66,9 +66,11 @@ def linear_response(dynamical_model, liouv_space_path, time_max,
         thermal state of the dynamical model.
     polarization : pair of polarizations, optional
         Valid polarizations include:
+
         - 'x', 'y' or 'z', interepreted as the respective unit vectors
         - Angles of rotation from [1, 0, 0] in the x-y plane
         - 3D lists, tuples or arrays of numbers
+
     ensemble_size : int, optional
         If provided, perform an ensemble average of this signal over Hamiltonian
         disorder, as determined by the `sample_ensemble` method of the provided
@@ -189,9 +191,11 @@ def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
         interactions.
     polarization : pair of polarizations, optional
         Valid polarizations include:
+
         - 'x', 'y' or 'z', interepreted as the respective unit vectors
         - Angles of rotation from [1, 0, 0] in the x-y plane
         - 3D lists, tuples or arrays of numbers
+
     initial_liouv_subspace : string, optional
         String indicating the subspace of Liouville space in which the provided
         state is defined.
@@ -357,14 +361,16 @@ def third_order_response(dynamical_model, coherence_time_max,
         third interactions. If provided, overrides population_time_max.
     geometry : '-++', '+-+' or '++-', optional
         String of '+' or '-' terms indicating whether to simulate the so-called
-        photon-echo signal $-k_1 + k_2 + k_3$ ('-++'), the non-rephasing signal
-        $k_1 - k_2 + k_3$ ('+-+') or the double-quantum-coherence signal
-        $k_1 + k_2 - k_3$ ('++-').
+        photon-echo signal :math:`-k_1 + k_2 + k_3` ('-++'), the non-rephasing
+        signal :math:`k_1 - k_2 + k_3` ('+-+') or the double-quantum-coherence
+        signal :math:`k_1 + k_2 - k_3` ('++-').
     polarization : four polarizations, optional
         Valid polarizations include:
+
         - 'x', 'y' or 'z', interepreted as the respective unit vectors
         - Angles of rotation from [1, 0, 0] in the x-y plane
         - 3D lists, tuples or arrays of numbers
+
     include_signal : container of any of 'GSB', 'ESE' and 'ESA', optional
         Indicates whether to include the ground-state-bleach (GSB), excited-
         state-emission (ESE) and excited-state-absorption (ESA) contributions to
@@ -389,27 +395,27 @@ def third_order_response(dynamical_model, coherence_time_max,
         Coherence, population and rephasing times at which the signal was
         simulated.
     signal : np.ndarray
-        3D array of shape (len(t1), len(t2), len(t3)) containing the simulated
+        3D array of shape `(len(t1), len(t2), len(t3))` containing the simulated
         complex valued electric field of the signal.
 
-    Note
-    ----
+    Notes
+    -----
     This function calculates the third order response function by explicitly
-    summing over all possible Liouville space pathways [1]. It also uses the
+    summing over all possible Liouville space pathways [1]_. It also uses the
     trick of using the Heisenberg picture to integrate the equations of motion
     during the last time interval, which speeds up calculations by ~100x over
-    the naive loop over all values of t1 and t2 [2].
+    the naive loop over all values of t1 and t2 [2]_.
 
     References
     ----------
-    [1] Abramavicius, D., Palmieri, B., Voronine, D. V., Sanda, F. & Mukamel, S.
-        Coherent Multidimensional Optical Spectroscopy of Excitons in Molecular
-        Aggregates; Quasiparticle versus Supermolecule Perspectives. Chem. Rev.
-        109, 2350-2408 (2009).
-    [2] Xu, J., Xu, R.-X., Abramavicius, D., Zhang, H. & Yan, Y. Advancing
-        hierarchical equations of motion for efficient evaluation of
-        coherent two-dimensional spectroscopy. Chin. J. Chem. Phys 24, 497
-        (2011). arXiv:1109.6168
+    .. [1] Abramavicius, D., Palmieri, B., Voronine, D. V., Sanda, F. & Mukamel,
+       S. Coherent Multidimensional Optical Spectroscopy of Excitons in
+       Molecular Aggregates; Quasiparticle versus Supermolecule Perspectives.
+       Chem. Rev. 109, 2350-2408 (2009).
+    .. [2] Xu, J., Xu, R.-X., Abramavicius, D., Zhang, H. & Yan, Y. Advancing
+       hierarchical equations of motion for efficient evaluation of coherent
+       two-dimensional spectroscopy. Chin. J. Chem. Phys 24, 497 (2011).
+       arXiv:1109.6168
     """
     return _third_order_response(
         dynamical_model, coherence_time_max, population_time_max,

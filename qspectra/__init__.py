@@ -20,8 +20,9 @@ from simulate.response import (linear_response, absorption_spectra,
 from simulate.utils import fourier_transform, integrate, bound_signal
 
 __all__ = ['DebyeBath', 'ArbitraryBath', 'UncoupledBath', 'PseudomodeBath',
-           'CM_FS', 'CM_K', 'GAUSSIAN_SD_FWHM', 'ElectronicHamiltonian',
-           'VibronicHamiltonian', 'n_excitations', 'matrix_to_ket_vec',
+           'CM_FS', 'CM_K', 'GAUSSIAN_SD_FWHM',
+           'Hamiltonian', 'ElectronicHamiltonian', 'VibronicHamiltonian',
+           'n_excitations', 'matrix_to_ket_vec',
            'ket_vec_to_matrix', 'matrix_to_bra_vec', 'unit_vec',
            'basis_transform', 'all_states', 'polarization_vector',
            'check_polarizations', 'invariant_weights_4th_order',

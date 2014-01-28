@@ -87,7 +87,7 @@ class DebyeBath(Bath):
 
         References
         ----------
-        J. Chem. Phys. 112, 7953
+        .. [1] J. Chem. Phys. 112, 7953
         """
         T = self.temperature
         lmbda = self.reorg_energy
@@ -105,29 +105,37 @@ class DebyeBath(Bath):
 class PseudomodeBath(Bath):
     """
     A bath specified by so-called pseudomodes.
-    Each pseudomode (PM) is represented by a Lorentzian in the
-    bath correlation SPECTRUM (the Fourier transform of the bath correlation function).
-    (Note that the bath correlation spectrum is temperature-dependent and is different from the temperature-INdependent bath spectral density.
-    Given the temperature the spectral density can be calculated from the bath correlation spectrum and vice versa.
-    See Ref. [J. Chem. Phys. 137, 204110 (2012)])
-    Given a spectral density and a temperature, the bath correlation spectrum can be calculated from that and fitted with the Lorentzians representing the pseudomodes.
+
+    Each pseudomode (PM) is represented by a Lorentzian in the bath correlation
+    SPECTRUM (the Fourier transform of the bath correlation function). (Note
+    that the bath correlation spectrum is temperature-dependent and is different
+    from the temperature-INdependent bath spectral density. Given the
+    temperature the spectral density can be calculated from the bath correlation
+    spectrum and vice versa. See Ref. [1]_) Given a spectral density and a
+    temperature, the bath correlation spectrum can be calculated from that and
+    fitted with the Lorentzians representing the pseudomodes.
 
     Parameters
     ----------
-    numb_pm: Number of the PMs (number of Lorentzians)
-    Omega: Frequecies of the PMs (where Lorentzians are centered)
-    gamma: Dampings of the PMs (widths of the Lorentzians)
-    huang: Couplings to the PMs (prefactors of the Lorentzians)
+    numb_pm : np.ndarray
+        Number of the PMs (number of Lorentzians)
+    Omega : np.ndarray
+        Frequecies of the PMs (where Lorentzians are centered)
+    gamma : np.ndarray
+        Dampings of the PMs (widths of the Lorentzians)
+    huang : np.ndarray
+        Couplings to the PMs (prefactors of the Lorentzians)
 
-    If the sites have separate baths, the parameters
-    Omega, gamma, and huang
-    of the PMs should be given as arrays of the form
-    np.ones((numb_pm, numb_sites), complex)
+    Notes
+    -----
+
+    If the sites have separate baths, the parameters `Omega`, `gamma`, and
+    `huang` of the PMs should be given as arrays with shape `(numb_pm,
+    numb_sites)`
 
     References
     ----------
-    J. Chem. Phys. 137, 204110 (2012)
-
+    .. [1] J. Chem. Phys. 137, 204110 (2012)
     """
     def __init__(self, numb_pm, Omega, gamma, huang):
         self.numb_pm = numb_pm

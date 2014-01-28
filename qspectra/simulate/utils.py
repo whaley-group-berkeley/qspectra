@@ -52,12 +52,15 @@ def _integrate(f, y0, t, t0, method_name, f_params, save_func, **kwargs):
 
 def integrate(f, y0, t, t0=None, method_name='zvode', f_params=None,
               save_func=None, **kwargs):
-    """
-    Functional interface to solvers from scipy.integrate.ode, providing
-    syntax resembling scipy.integrate.odeint to solve the first-order
+    r"""
+    Functional interface to solvers from `scipy.integrate.ode`
+
+    Provides syntax resembling `scipy.integrate.odeint` to solve the first-order
     differential equation:
 
-        dy/dt = f(t, y, ...)
+    .. math::
+
+        \frac{dy}{dt} = f(t, y, \ldots)
 
     with the initial value y0 at times specified by the vector t.
 
@@ -91,6 +94,11 @@ def integrate(f, y0, t, t0=None, method_name='zvode', f_params=None,
     y : np.ndarray, shape (len(t), len(save_func(y0)))
         2D array containing the results of calling save_func on the state of the
         integrator at all given times t.
+
+    See also
+    --------
+    scipy.integrate.ode
+    scipy.integrate.odeint
     """
     if len(y0.shape) == 1:
         return _integrate(f, y0, t, t0, method_name, f_params, save_func,
@@ -145,14 +153,17 @@ def _symmetrize(t, x, axis=-1):
 
 def fourier_transform(t, x, axis=-1, rw_freq=0, unit_convert=1, sign=1,
                       convention='angular'):
-    """
+    r"""
     Fourier transform a signal defined in a rotating frame using FFT
 
     By default, approximates the integral:
+
     .. math::
+
         X(\omega) = \int e^{i (\omega - \omega_0) t} x(t) dt
 
-    where $\omega_0$ is the rotating wave frequency.
+
+    where :math:`\omega_0` is the rotating wave frequency.
 
     The signal is assumed to be zero at any times at which it is not provided.
 

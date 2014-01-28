@@ -52,20 +52,19 @@ class Pulse(object):
 
 class CustomPulse(Pulse):
     """
-    Define a Pulse whose field is given by a custom function
+    Pulse whose field is given by a custom function
+
+    Parameters
+    ----------
+    t_init : float
+        Initital time for the pulse.
+    t_final : float
+        Final time for the pulse.
+    call : function
+        Function to call to return the pulse electric field at a given time
+        and rotating wave frequency.
     """
     def __init__(self, t_init, t_final, call):
-        """
-        Parameters
-        ----------
-        t_init : float
-            Initital time for the pulse.
-        t_final : float
-            Final time for the pulse.
-        call : function
-            Function to call to return the pulse electric field at a given time
-            and rotating wave frequency.
-        """
         self.t_init = t_init
         self.t_final = t_final
         self.call = call
@@ -75,30 +74,30 @@ class CustomPulse(Pulse):
 
 
 class GaussianPulse(Pulse):
+    """
+    Pulse with a Gaussian envelope
+
+    Parameters
+    ----------
+    carrier_freq : number
+        Pulse carrier frequency (in frequency units).
+    fwhm : number
+        Pulse full-width-at-half-maximum (in time units).
+    t_peak : number, optional
+        Central peak time for this Gaussian pulse (default 0).
+    scale : number, optional
+        Scale factor which sets the maximum amplitude in the time domain
+        (default 1).
+    freq_convert : number, optional
+        Conversion factor from frequency to time units. Default value is 1;
+        set to constants.CM_FS to specify frequencies in angular cm^-1 and
+        time in fs.
+    t_limits_multiple : number, optional
+        Number of standard deviations before and after t_peak to include in
+        the pulse time limits (default 3).
+    """
     def __init__(self, carrier_freq, fwhm, t_peak=0, scale=1, freq_convert=1,
                  t_limits_multiple=3):
-        """
-        Initialize a Gaussian pulse
-
-        Parameters
-        ----------
-        carrier_freq : number
-            Pulse carrier frequency (in frequency units).
-        fwhm : number
-            Pulse full-width-at-half-maximum (in time units).
-        t_peak : number, optional
-            Central peak time for this Gaussian pulse (default 0).
-        scale : number, optional
-            Scale factor which sets the maximum amplitude in the time domain
-            (default 1).
-        freq_convert : number, optional
-            Conversion factor from frequency to time units. Default value is 1;
-            set to constants.CM_FS to specify frequencies in angular cm^-1 and
-            time in fs.
-        t_limits_multiple : number, optional
-            Number of standard deviations before and after t_peak to include in
-            the pulse time limits (default 3).
-        """
         sigma = GAUSSIAN_SD_FWHM * fwhm
         self.two_sigma_squared = 2 * sigma ** 2
 

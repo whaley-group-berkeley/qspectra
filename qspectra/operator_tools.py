@@ -46,11 +46,11 @@ def basis_transform(X, U):
 
     How to apply the transformation is inferred by the dimensions of X and U.
 
-    Reference
-    ---------
-    Havel, T. F. Robust procedures for converting among Lindblad, Kraus and
-    matrix representations of quantum dynamical semigroups. J Math. Phys.
-    44, 534-557 (2003).
+    References
+    ----------
+    .. [1] Havel, T. F. Robust procedures for converting among Lindblad, Kraus
+       and matrix representations of quantum dynamical semigroups. J Math. Phys.
+       44, 534-557 (2003).
     """
     N = len(U)
     if X.shape == (N,):
@@ -110,8 +110,10 @@ def operator_1_to_2(operator1):
     From the matrix representation of an operator in the 1-excitation subspace,
     determine its representation in the 2-excitation subspace
 
-    Assumes that given the matrix element A_{nm}, the full representation of
-    the operator is given by:
+    Assumes that given the matrix element :math:`A_{nm}`, the full
+    representation of the operator is given by:
+
+    .. math::
         \sum_{n,m} A_{nm} a^\dagger_n a_m
 
     Parameters
@@ -147,8 +149,10 @@ def operator_extend(operator1, subspace='gef'):
     Extend an operator defined in the 1-excitation subspace to include the
     ground and/or double-excitation subspaces
 
-    Assumes that given the matrix element A_{nm}, the full representation of
-    the operator is given by:
+    Assumes that given the matrix element :math:`A_{nm}`, the full
+    representation of the operator is given by:
+
+    .. math::
         \sum_{n,m} A_{nm} a^\dagger_n a_m
 
     Parameters
