@@ -534,6 +534,9 @@ class VibronicHamiltonian(Hamiltonian):
         where |n> is the singly excited electronic state of site n in the full
         singly excited subspace, and b(m) and b(m)^\dagger are the
         vibrational annihilation and creation operators for vibration m.
+    sys_bath_coupling_type : container, default 'el'
+        Container of either 'el' or 'vib' indicating the form of the
+        system-bath coupling operators to use.
     energy_spread_extra : float, optional
         Default extra frequency to add to the spread of energies when
         determining the frequency step size automatically. To avoid unnecessary
@@ -543,7 +546,8 @@ class VibronicHamiltonian(Hamiltonian):
         set to one percent of the average excited state transition energy.
     """
     def __init__(self, electronic, n_vibrational_levels, vib_energies,
-                 elec_vib_couplings, energy_spread_extra=None):
+                 elec_vib_couplings, sys_bath_coupling_type='el',
+                 energy_spread_extra=None):
         self.electronic = electronic
         self.energy_spread_extra = self.electronic.energy_spread_extra
         self.bath = self.electronic.bath
@@ -551,6 +555,7 @@ class VibronicHamiltonian(Hamiltonian):
         self.n_vibrational_levels = np.asarray(n_vibrational_levels)
         self.vib_energies = np.asarray(vib_energies)
         self.elec_vib_couplings = np.asarray(elec_vib_couplings)
+        self.sys_bath_coupling_type = sys_bath_coupling_type
         super(VibronicHamiltonian, self).__init__(energy_spread_extra)
 
     implements_eq = True
@@ -561,6 +566,7 @@ class VibronicHamiltonian(Hamiltonian):
                        other.n_vibrational_levels) and
                 np.all(self.vib_energies == other.vib_energies) and
                 np.all(self.elec_vib_couplings == other.elec_vib_couplings) and
+                self.sys_bath_coupling_type == other.sys_bath_coupling_type and
                 super(VibronicHamiltonian, self)._eq(other, max_depth))
 
     @memoized_property
@@ -622,12 +628,14 @@ class VibronicHamiltonian(Hamiltonian):
     def _in_rotating_frame(self, rw_freq):
         return type(self)(self.electronic.in_rotating_frame(rw_freq),
                           self.n_vibrational_levels, self.vib_energies,
-                          self.elec_vib_couplings, self.energy_spread_extra)
+                          self.elec_vib_couplings, self.sys_bath_coupling_type,
+                          self.energy_spread_extra)
 
     def _sample(self, n, random_orientations):
         return type(self)(self.electronic.sample(n, random_orientations),
                           self.n_vibrational_levels, self.vib_energies,
-                          self.elec_vib_couplings, self.energy_spread_extra)
+                          self.elec_vib_couplings, self.sys_bath_coupling_type,
+                          self.energy_spread_extra)
 
     def el_to_sys_operator(self, el_operator):
         """
@@ -652,10 +660,57 @@ class VibronicHamiltonian(Hamiltonian):
         return self.el_to_sys_operator(
             self.electronic.dipole_operator(*args, **kwargs))
 
-    def system_bath_couplings(self, *args, **kwargs):
+    def system_bath_couplings(self, subspace='gef'):
         """
         Return a list of matrix representations in the given subspace of the
         system-bath coupling operators
+        
+        The system-bath coupling operators can be selected to be of type:
+        'el' : purely electronic
+            The sys-bath coupling operators are taken to be the electronic
+            projector |n><n| as specified in
+            ElectronicHamiltonian.system_bath_couplings
+        'vib' : vibronic
+            Note: this coupling assumes that each electronic site is coupled
+            to only one vibrational mode
+            
+            The sys-bath coupling operators for each site are of the form
+            H_{sb} = |g><g|(b + b^\dagger)
+                     + |e><e|(b - \sqrt{X} + b^\dagger - \sqrt{X})
+                   = (b + b^\dagger) - 2*\sqrt{X}|e><e|
+            where |g> and |e> are the ground and singly excited electronic
+            states for the site, b and b^\dagger are the annihilation and
+            creation operators for the vibrational mode of the site, and X is
+            the Huang-Rhys factor describing the shift in the ground and singly
+            excited potential energy surfaces, which is related to the elec-vib
+            coupling
         """
-        return self.el_to_sys_operator(
-            self.electronic.system_bath_couplings(*args, **kwargs))
+        if self.bath is None:
+            raise HamiltonianError('bath undefined')
+        elif self.sys_bath_coupling_type == 'el':
+            return self.el_to_sys_operator(
+                self.electronic.system_bath_couplings(subspace))
+        elif self.sys_bath_coupling_type == 'vib':
+            dim = (self.electronic.n_states(subspace)
+                   * self.n_vibrational_states)
+            sys_bath_couplings = np.array([]).reshape((0,dim,dim))
+            
+            shifts = np.true_divide(np.diag(self.elec_vib_couplings),
+                                    self.vib_energies)
+            
+            for m, num_levels in enumerate(self.n_vibrational_levels):
+                vib_op = extend_vib_operator(self.n_vibrational_levels, m,
+                                             vib_annihilate(num_levels)
+                                             + vib_create(num_levels))
+                op_1 = self.vib_to_sys_operator(vib_op, subspace)
+                
+                op_2 = (2.*shifts[m]
+                        * self.el_to_sys_operator(
+                              self.electronic.number_operator(m, subspace)))
+                
+                sys_bath_couplings = np.concatenate((sys_bath_couplings,
+                                                     np.array([op_1 + op_2])))
+            
+            return sys_bath_couplings
+        else:
+            raise HamiltonianError('system-bath coupling type unrecognized')
