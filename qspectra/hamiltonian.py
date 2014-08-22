@@ -509,6 +509,24 @@ class ElectronicHamiltonian(Hamiltonian):
         return np.array([self.number_operator(n, subspace)
                          for n in xrange(self.n_sites)])
 
+    def get_labels_H(self, subspace='gef'):
+        # NOTE: the following only works for fermionic systems.
+        num_sites = len(self.electronic.H_1exc)
+        binary_labels_1exc = [2 ** i for i in range(num_sites)]
+        binary_labels_full = np.diag(operator_extend(np.diag(binary_labels_1exc), subspace))
+        return ['|' + ('{:0' + str(num_sites) + 'b}').format(i)[::-1] + '>' for i in binary_labels_full]
+
+    def pretty_print_H(self, subspace='gef'):
+        """
+        returns the self.H matrix wrapped as a pd.DataFrame.
+        this is used to label the basis states
+        """
+        import pandas as pd
+        labels = self.get_labels_H(subspace)
+        matrix = self.H(subspace)
+        dframe = pd.DataFrame(matrix, columns=labels)
+        print dframe
+
 
 class VibronicHamiltonian(Hamiltonian):
     """
@@ -658,3 +676,44 @@ class VibronicHamiltonian(Hamiltonian):
         """
         return self.el_to_sys_operator(
             self.electronic.system_bath_couplings(*args, **kwargs))
+
+    def get_labels_vib(self):
+        # NOTE: the following only works for fermionic systems.
+        vib_label_operator = np.diag(np.zeros(self.n_vibrational_states))
+        num_sites = len(self.n_vibrational_levels)
+        for m, num_levels in enumerate(self.n_vibrational_levels):
+            energy = 2 ** m
+            vib_operator = np.diag(np.arange(num_levels))
+            vib_label_operator += energy * extend_vib_operator(self.n_vibrational_levels, m, vib_operator)
+        vib_labels = np.diag(vib_label_operator)
+        return ['|' + ('{:0' + str(num_sites) + 'b}').format(int(i))[::-1] + '>' for i in vib_labels]
+
+
+    def get_labels_full(self, subspace='gef'):
+        # NOTE: the following only works for fermionic systems.
+        num_sites = len(self.electronic.H_1exc)
+        binary_labels_1exc = [2 ** i for i in range(num_sites)]
+        binary_labels_full = np.diag(self.el_to_sys_operator(operator_extend(np.diag(binary_labels_1exc), subspace)))
+        elec =  ['|e' + ('{:0' + str(num_sites) + 'b}').format(int(i))[::-1] + '>' for i in binary_labels_full]
+
+        vib_label_operator = np.diag(np.zeros(self.n_vibrational_states))
+        num_sites = len(self.n_vibrational_levels)
+        for m, num_levels in enumerate(self.n_vibrational_levels):
+            energy = 2 ** m
+            vib_operator = np.diag(np.arange(num_levels))
+            vib_label_operator += energy * extend_vib_operator(self.n_vibrational_levels, m, vib_operator)
+        vib_labels = np.diag(self.vib_to_sys_operator(vib_label_operator))
+        vib = ['|v' + ('{:0' + str(num_sites) + 'b}').format(int(i))[::-1] + '>' for i in vib_labels]
+    
+        return [i+j for i,j in zip(elec, vib)] 
+
+    def pretty_print_H(self, subspace='gef'):
+        """
+        returns the self.H matrix wrapped as a pd.DataFrame.
+        this is used to label the basis states
+        """
+        import pandas as pd
+        labels = self.get_labels_full(subspace)
+        matrix = self.H(subspace)
+        dframe = pd.DataFrame(matrix, columns=labels)
+        print dframe
