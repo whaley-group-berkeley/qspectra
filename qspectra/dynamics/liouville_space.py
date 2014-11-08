@@ -219,7 +219,7 @@ class LiouvilleSpaceModel(DynamicalModel):
         raise NotImplementedError('subclass must implement the property '
                                   '`evolution_super_operator`')
 
-    def equation_of_motion(self, liouville_subspace, heisenberg_picture=False):
+    def equation_of_motion(self, liouville_subspace, heisenberg_picture=False, sparse_mat=True):
         """
         Return the equation of motion for this dynamical model in the given
         subspace, a function which takes a state vector and returns its first
@@ -234,6 +234,12 @@ class LiouvilleSpaceModel(DynamicalModel):
             # and:
             #     L.T.dot(rho)
             evolve_matrix = evolve_matrix.T
+
+        if sparse_mat:
+            from scipy.sparse import csr_matrix
+            evolve_matrix = csr_matrix(evolve_matrix)
+
+        # this is the function that is passed to the integrator
         def eom(t, rho):
             return evolve_matrix.dot(rho)
         return eom
