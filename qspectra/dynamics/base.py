@@ -26,6 +26,8 @@ class DynamicalModel(object):
     hilbert_subspace : container, default 'ge'
         Container of any or all of 'g', 'e' and 'f' indicating the maximum
         set of Hilbert subspace on which to calculate the dynamics.
+    unit_convert : number, optional
+        Unit conversion from energy to time units (default 1).
     evolve_basis : string, default 'site'
         Either 'site' or 'exciton'. specifies whether to evolve the density
         matrix in the site or the exciton basis.
