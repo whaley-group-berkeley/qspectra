@@ -92,7 +92,7 @@ class Hamiltonian(object):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, energy_spread_extra=None):
+    def __init__(self, energy_spread_extra=None, basis_labels=None):
         self.energy_spread_extra = energy_spread_extra
         # keep track of the non-sampled and non-rotating version of this
         # Hamiltonian for the `in_rotating_frame` and `sample` methods:
@@ -101,6 +101,7 @@ class Hamiltonian(object):
         # keep track of the rotating wave frequency, so it's possible to check
         # what rotating wave frquency has been set:
         self.rw_freq = 0
+        self._basis_labels = basis_labels
 
     @property
     def _original(self):
@@ -358,6 +359,21 @@ class Hamiltonian(object):
         """
         return 1.0 / self.freq_step
 
+    def basis_labels(self, subspace, add_braket=False):
+        if add_braket:
+            return ['|{}>'.format(i) for i in self._basis_labels]
+        else:
+            return self._basis_labels
+
+    def to_DataFrame(self, subspace, add_braket=False):
+        """
+        Returns the Hamiltonaian wrapped in a Pandas DataFrame. Useful for
+        pretty printing if the basis labels are defined.
+        """
+        import pandas as pd
+        labels = self.basis_labels(subspace, add_braket)
+        matrix = self.H(subspace)
+        return pd.DataFrame(matrix, columns=labels, index=labels)
 
 def diagonal_gaussian_disorder(fwhm, n_sites):
     def disorder(random_state):
@@ -415,7 +431,7 @@ class ElectronicHamiltonian(Hamiltonian):
         excited state transition energy.
     """
     def __init__(self, H_1exc, bath=None, dipoles=None, disorder=None,
-                 random_seed=0, energy_spread_extra=None):
+                 random_seed=0, energy_spread_extra=None, basis_labels=None):
         self.H_1exc = check_hermitian(H_1exc)
         self.bath = bath
         self.dipoles = np.asarray(dipoles) if dipoles is not None else None
@@ -423,7 +439,7 @@ class ElectronicHamiltonian(Hamiltonian):
         self.random_seed = random_seed
         # used by various dynamics methods to determine indices:
         self.n_vibrational_states = 1
-        super(ElectronicHamiltonian, self).__init__(energy_spread_extra)
+        super(ElectronicHamiltonian, self).__init__(energy_spread_extra, basis_labels)
 
     _implements_eq = True
 
@@ -509,6 +525,33 @@ class ElectronicHamiltonian(Hamiltonian):
         return np.array([self.number_operator(n, subspace)
                          for n in xrange(self.n_sites)])
 
+    def basis_labels(self, subspace='gef', add_braket=False):
+        """
+        If double excitations are requested, then default to using the Fock basis
+        If custom labels are used but the ground state is included, then the
+        label "gs" is prepended
+        """
+        if self._basis_labels != None and 'f' not in subspace:
+            if 'g' in subspace:
+                labels = ['gs'] + self._basis_labels
+        else:
+            labels = self._get_Fock_basis_labels(subspace)
+        if add_braket:
+            return ['|{}>'.format(i) for i in labels]
+        else:
+            return labels
+
+    def _get_Fock_basis_labels(self, subspace):
+        """
+        returns the Fock basis labels:
+        100..  010..  001..
+        """
+        binary_labels_1exc = [2 ** i for i in range(self.n_sites)]
+        binary_labels_full = np.diag(operator_extend(np.diag(binary_labels_1exc),
+                                     subspace))
+        return [('{:0' + str(self.n_sites) + 'b}').format(i)[::-1]
+                for i in binary_labels_full]
+
 
 class VibronicHamiltonian(Hamiltonian):
     """
@@ -542,7 +585,7 @@ class VibronicHamiltonian(Hamiltonian):
         excited state transition energy.
     """
     def __init__(self, electronic, n_vibrational_levels, vib_energies,
-                 elec_vib_couplings, energy_spread_extra=None):
+                 elec_vib_couplings, energy_spread_extra=None, basis_labels=None):
         self.electronic = electronic
         self.energy_spread_extra = self.electronic.energy_spread_extra
         self.bath = self.electronic.bath
@@ -550,7 +593,7 @@ class VibronicHamiltonian(Hamiltonian):
         self.n_vibrational_levels = np.asarray(n_vibrational_levels)
         self.vib_energies = np.asarray(vib_energies)
         self.elec_vib_couplings = np.asarray(elec_vib_couplings)
-        super(VibronicHamiltonian, self).__init__(energy_spread_extra)
+        super(VibronicHamiltonian, self).__init__(energy_spread_extra, basis_labels)
 
     _implements_eq = True
 
@@ -651,6 +694,17 @@ class VibronicHamiltonian(Hamiltonian):
         return self.el_to_sys_operator(
             self.electronic.dipole_operator(*args, **kwargs))
 
+    def vib_basis_labels(self):
+        vib_label_operator = np.diag(np.zeros(self.n_vibrational_states))
+        num_sites = len(self.n_vibrational_levels)
+        for m, num_levels in enumerate(self.n_vibrational_levels):
+            index = 10 ** (num_sites - m - 1)
+            vib_operator = np.diag(np.arange(num_levels))
+            temp =  extend_vib_operator(self.n_vibrational_levels, m, vib_operator)
+            vib_label_operator += index * temp
+        vib_labels = np.diag(vib_label_operator)
+        return [('{:0' + str(num_sites) + '}').format(int(i)) for i in vib_labels]
+
     def system_bath_couplings(self, *args, **kwargs):
         """
         Return a list of matrix representations in the given subspace of the
@@ -658,3 +712,34 @@ class VibronicHamiltonian(Hamiltonian):
         """
         return self.el_to_sys_operator(
             self.electronic.system_bath_couplings(*args, **kwargs))
+
+    def basis_labels(self, subspace='gef', add_braket=False):
+        """
+        If double excitations are requested, then default to using the Fock basis
+        If custom labels are used but the ground state is included, then the
+        label "gs" is prepended.
+
+        Vibronic basis labels are returned as a list of tuples:
+        [(elec_basis_label, vib_basis_label), ]
+        """
+        if self._basis_labels != None and 'f' not in subspace:
+            elec_labels = self._basis_labels
+            if 'g' in subspace:
+                elec_labels = ['gs'] + elec_labels
+        else:
+            elec_labels = self.electronic._get_Fock_basis_labels(subspace)
+        vib_labels = self.vib_basis_labels()
+
+        dummy_elec_operator = np.diag(range(len(elec_labels)))
+        elec_indices = np.diag(self.el_to_sys_operator(dummy_elec_operator))
+        elec_labels_full = [elec_labels[int(i)] for i in elec_indices]
+
+        dummy_vib_operator = np.diag(range(len(vib_labels)))
+        vib_indices = np.diag(self.vib_to_sys_operator(dummy_vib_operator))
+        vib_labels_full = [vib_labels[int(i)] for i in vib_indices]
+
+        labels = zip(elec_labels_full, vib_labels_full)
+        if add_braket:
+            return ['|{}>|{}>'.format(i, j) for i, j in labels]
+        else:
+            return labels
