@@ -532,8 +532,9 @@ class ElectronicHamiltonian(Hamiltonian):
         label "gs" is prepended
         """
         if self._basis_labels != None and 'f' not in subspace:
+            labels = self._basis_labels
             if 'g' in subspace:
-                labels = ['gs'] + self._basis_labels
+                labels.insert(0, 'gs')
         else:
             labels = self._get_Fock_basis_labels(subspace)
         if add_braket:
@@ -722,12 +723,8 @@ class VibronicHamiltonian(Hamiltonian):
         Vibronic basis labels are returned as a list of tuples:
         [(elec_basis_label, vib_basis_label), ]
         """
-        if self._basis_labels != None and 'f' not in subspace:
-            elec_labels = self._basis_labels
-            if 'g' in subspace:
-                elec_labels = ['gs'] + elec_labels
-        else:
-            elec_labels = self.electronic._get_Fock_basis_labels(subspace)
+
+        elec_labels = self.electronic.basis_labels(subspace)
         vib_labels = self.vib_basis_labels()
 
         dummy_elec_operator = np.diag(range(len(elec_labels)))
