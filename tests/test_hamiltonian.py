@@ -61,7 +61,7 @@ class SharedTests(object):
         for state in (self.H_sys.ground_state('gef'),
                       self.H_sys.thermal_state('gef')):
             hamiltonian.check_hermitian(state)
-            self.assertEqual(np.trace(state), 1)
+            self.assertAlmostEqual(np.trace(state), 1)
 
 
 class DummyBath(object):

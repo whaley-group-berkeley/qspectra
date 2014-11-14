@@ -66,7 +66,7 @@ def thermal_state(hamiltonian_matrix, temperature):
         hamiltonian_matrix = np.asarray(hamiltonian_matrix)
         rho = scipy.linalg.expm(-hamiltonian_matrix / float(temperature))
         trace = np.trace(rho)
-        if trace == 0:
+        if trace == 0 or np.isnan(rho).any():
             raise OverflowError(('temperature=%s too low to reliably calculate '
                                  'thermal_state; raise it or set it to zero '
                                  '(in which case ground_state is substituted')
