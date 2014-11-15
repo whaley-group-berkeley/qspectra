@@ -162,6 +162,18 @@ class TestElectronicHamiltonian(unittest.TestCase, SharedTests):
         with self.assertRaises(OverflowError):
             print H_with_bath.thermal_state('gef')
 
+    def test_basis_labels(self):
+        self.H_sys._basis_labels = ["one", "two"]
+        self.assertEqual(self.H_sys.basis_labels('gef', braket=True), 
+            ['|g>', '|one>', '|two>', '|one,two>'])
+        self.assertEqual(self.H_sys.basis_labels('gef'), 
+            ['g', 'one', 'two', 'one,two'])
+        self.H_sys._basis_labels = None
+        self.assertEqual(self.H_sys.basis_labels('gef', braket=True), 
+            ['|00>', '|10>', '|01>', '|11>'])
+        self.assertEqual(self.H_sys.basis_labels('gef'), 
+            ['00', '10', '01', '11'])
+
 
 class TestVibronicHamiltonian(unittest.TestCase, SharedTests):
     def setUp(self):
@@ -187,3 +199,15 @@ class TestVibronicHamiltonian(unittest.TestCase, SharedTests):
         assert_allclose(self.H_sys.system_bath_couplings('ge'),
                         [[[0, 0, 0, 0], [0, 0, 0, 0],
                           [0, 0, 1, 0], [0, 0, 0, 1]]])
+
+    def test_basis_labels(self):
+        self.H_sys.electronic._basis_labels = ["one"]
+        self.assertEqual(self.H_sys.basis_labels('gef', braket=1), 
+            ['|g>|0>', '|g>|1>', '|one>|0>', '|one>|1>'])
+        self.assertEqual(self.H_sys.basis_labels('gef'), 
+            [('g', '0'), ('g', '1'), ('one', '0'), ('one', '1')])
+        self.H_sys.electronic._basis_labels = None
+        self.assertEqual(self.H_sys.basis_labels('gef', braket=1), 
+            ['|0>|0>', '|0>|1>', '|1>|0>', '|1>|1>'])
+        self.assertEqual(self.H_sys.basis_labels('gef'), 
+            [('0', '0'), ('0', '1'), ('1', '0'), ('1', '1')])
