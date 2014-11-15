@@ -163,17 +163,19 @@ class TestElectronicHamiltonian(unittest.TestCase, SharedTests):
             print H_with_bath.thermal_state('gef')
 
     def test_basis_labels(self):
-        self.H_sys._basis_labels = ["one", "two"]
-        self.assertEqual(self.H_sys.basis_labels('gef', braket=True), 
-            ['|g>', '|one>', '|two>', '|one,two>'])
-        self.assertEqual(self.H_sys.basis_labels('gef'), 
-            ['g', 'one', 'two', 'one,two'])
-        self.H_sys._basis_labels = None
         self.assertEqual(self.H_sys.basis_labels('gef', braket=True), 
             ['|00>', '|10>', '|01>', '|11>'])
         self.assertEqual(self.H_sys.basis_labels('gef'), 
             ['00', '10', '01', '11'])
 
+        H_sys_labeled = hamiltonian.ElectronicHamiltonian(
+        self.M, bath=None, dipoles=[[1, 0, 0], [0, 1, 0]],
+        disorder=1, energy_spread_extra=1.0, basis_labels=["one", "two"])
+
+        self.assertEqual(H_sys_labeled.basis_labels('gef', braket=True), 
+            ['|g>', '|one>', '|two>', '|one,two>'])
+        self.assertEqual(H_sys_labeled.basis_labels('gef'), 
+            ['g', 'one', 'two', 'one,two'])
 
 class TestVibronicHamiltonian(unittest.TestCase, SharedTests):
     def setUp(self):
@@ -201,13 +203,18 @@ class TestVibronicHamiltonian(unittest.TestCase, SharedTests):
                           [0, 0, 1, 0], [0, 0, 0, 1]]])
 
     def test_basis_labels(self):
-        self.H_sys.electronic._basis_labels = ["one"]
-        self.assertEqual(self.H_sys.basis_labels('gef', braket=1), 
-            ['|g>|0>', '|g>|1>', '|one>|0>', '|one>|1>'])
-        self.assertEqual(self.H_sys.basis_labels('gef'), 
-            [('g', '0'), ('g', '1'), ('one', '0'), ('one', '1')])
-        self.H_sys.electronic._basis_labels = None
         self.assertEqual(self.H_sys.basis_labels('gef', braket=1), 
             ['|0>|0>', '|0>|1>', '|1>|0>', '|1>|1>'])
         self.assertEqual(self.H_sys.basis_labels('gef'), 
             [('0', '0'), ('0', '1'), ('1', '0'), ('1', '1')])
+
+        H_E = hamiltonian.ElectronicHamiltonian([[1.0]], bath=DummyBath(),
+                                                dipoles=[[1, 0, 0], [0, 1, 0]],
+                                                disorder=0, basis_labels=["one"])
+        H_sys_labeled = hamiltonian.VibronicHamiltonian(H_E, [2], [10], [[5]])
+
+        self.assertEqual(H_sys_labeled.basis_labels('gef', braket=1), 
+            ['|g>|0>', '|g>|1>', '|one>|0>', '|one>|1>'])
+        self.assertEqual(H_sys_labeled.basis_labels('gef'), 
+            [('g', '0'), ('g', '1'), ('one', '0'), ('one', '1')])
+
