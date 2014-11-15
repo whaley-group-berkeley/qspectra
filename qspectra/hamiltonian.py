@@ -80,6 +80,8 @@ def add_braket(basis_labels):
     braket_labels = []
     for label in basis_labels:
         try:
+            if isinstance(label, str):
+                raise TypeError
             braket_label = ''.join(['|{}>'.format(i) for i in label])
         except TypeError:
             braket_label = '|{}>'.format(label)
