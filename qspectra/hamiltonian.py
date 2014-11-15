@@ -76,6 +76,15 @@ def thermal_state(hamiltonian_matrix, temperature):
         rho = ground_state(hamiltonian_matrix)
     return rho.astype(complex)
 
+def add_braket(basis_labels):
+    braket_labels = []
+    for label in basis_labels:
+        try:
+            braket_label = ''.join(['|{}>'.format(i) for i in label])
+        except TypeError:
+            braket_label = '|{}>'.format(label)
+        braket_labels.append(braket_label)
+    return braket_labels
 
 class HamiltonianError(Exception):
     """
@@ -359,19 +368,19 @@ class Hamiltonian(object):
         """
         return 1.0 / self.freq_step
 
-    def basis_labels(self, subspace, add_braket=False):
-        if add_braket:
-            return ['|{}>'.format(i) for i in self._basis_labels]
+    def basis_labels(self, subspace, braket=False):
+        if braket:
+            return add_braket(self._basis_labels)
         else:
             return self._basis_labels
 
-    def to_DataFrame(self, subspace, add_braket=False):
+    def to_dataframe(self, subspace, braket=False):
         """
         Returns the Hamiltonaian wrapped in a Pandas DataFrame. Useful for
         pretty printing if the basis labels are defined.
         """
         import pandas as pd
-        labels = self.basis_labels(subspace, add_braket)
+        labels = self.basis_labels(subspace, braket)
         matrix = self.H(subspace)
         return pd.DataFrame(matrix, columns=labels, index=labels)
 
@@ -525,34 +534,30 @@ class ElectronicHamiltonian(Hamiltonian):
         return np.array([self.number_operator(n, subspace)
                          for n in xrange(self.n_sites)])
 
-    def basis_labels(self, subspace='gef', add_braket=False):
+    def basis_labels(self, subspace='gef', braket=False):
         """
-        If double excitations are requested, then default to using the Fock basis
         If custom labels are used but the ground state is included, then the
-        label "gs" is prepended
+        label "g" is used to represent the ground state. If _basis_labels is None,
+        then the Fock states are used (000, 100, 010, 001 ...)
         """
-        if self._basis_labels != None and 'f' not in subspace:
-            labels = self._basis_labels
-            if 'g' in subspace:
-                labels.insert(0, 'gs')
-        else:
-            labels = self._get_Fock_basis_labels(subspace)
-        if add_braket:
-            return ['|{}>'.format(i) for i in labels]
+        labels = self._get_Fock_basis_labels(subspace, self._basis_labels)
+        if braket:
+            return add_braket(labels)
         else:
             return labels
 
-    def _get_Fock_basis_labels(self, subspace):
-        """
-        returns the Fock basis labels:
-        100..  010..  001..
-        """
-        binary_labels_1exc = [2 ** i for i in range(self.n_sites)]
-        binary_labels_full = np.diag(operator_extend(np.diag(binary_labels_1exc),
-                                     subspace))
-        return [('{:0' + str(self.n_sites) + 'b}').format(i)[::-1]
-                for i in binary_labels_full]
+    def _get_Fock_basis_labels(self, subspace, labels=None):
+        labels_1exc = [10 ** (self.n_sites - i - 1) for i in range(self.n_sites)]
+        labels_full = np.diag(operator_extend(np.diag(labels_1exc), subspace))
+        label_indices = [str(i).zfill(self.n_sites) for i in labels_full]
 
+        if labels is None:
+            return label_indices
+        else:
+            custom_labels = [','.join([label for i, label in enumerate(labels)
+                             if state[i] == '1']) for state in label_indices]
+            custom_labels[0] = 'g'
+            return custom_labels
 
 class VibronicHamiltonian(Hamiltonian):
     """
@@ -695,6 +700,14 @@ class VibronicHamiltonian(Hamiltonian):
         return self.el_to_sys_operator(
             self.electronic.dipole_operator(*args, **kwargs))
 
+    def system_bath_couplings(self, *args, **kwargs):
+        """
+        Return a list of matrix representations in the given subspace of the
+        system-bath coupling operators
+        """
+        return self.el_to_sys_operator(
+            self.electronic.system_bath_couplings(*args, **kwargs))
+
     def vib_basis_labels(self):
         vib_label_operator = np.diag(np.zeros(self.n_vibrational_states))
         num_sites = len(self.n_vibrational_levels)
@@ -706,15 +719,7 @@ class VibronicHamiltonian(Hamiltonian):
         vib_labels = np.diag(vib_label_operator)
         return [('{:0' + str(num_sites) + '}').format(int(i)) for i in vib_labels]
 
-    def system_bath_couplings(self, *args, **kwargs):
-        """
-        Return a list of matrix representations in the given subspace of the
-        system-bath coupling operators
-        """
-        return self.el_to_sys_operator(
-            self.electronic.system_bath_couplings(*args, **kwargs))
-
-    def basis_labels(self, subspace='gef', add_braket=False):
+    def basis_labels(self, subspace='gef', braket=False):
         """
         If double excitations are requested, then default to using the Fock basis
         If custom labels are used but the ground state is included, then the
@@ -727,16 +732,8 @@ class VibronicHamiltonian(Hamiltonian):
         elec_labels = self.electronic.basis_labels(subspace)
         vib_labels = self.vib_basis_labels()
 
-        dummy_elec_operator = np.diag(range(len(elec_labels)))
-        elec_indices = np.diag(self.el_to_sys_operator(dummy_elec_operator))
-        elec_labels_full = [elec_labels[int(i)] for i in elec_indices]
-
-        dummy_vib_operator = np.diag(range(len(vib_labels)))
-        vib_indices = np.diag(self.vib_to_sys_operator(dummy_vib_operator))
-        vib_labels_full = [vib_labels[int(i)] for i in vib_indices]
-
-        labels = zip(elec_labels_full, vib_labels_full)
-        if add_braket:
-            return ['|{}>|{}>'.format(i, j) for i, j in labels]
+        labels = [(e, v) for e in elec_labels for v in vib_labels] 
+        if braket:
+            return add_braket(labels)
         else:
             return labels
