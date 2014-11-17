@@ -371,10 +371,7 @@ class Hamiltonian(object):
         return 1.0 / self.freq_step
 
     def basis_labels(self, subspace, braket=False):
-        if braket:
-            return add_braket(self._basis_labels)
-        else:
-            return self._basis_labels
+        return add_braket(self._basis_labels) if braket else self._basis_labels
 
     def to_dataframe(self, subspace, braket=False):
         """
@@ -543,10 +540,7 @@ class ElectronicHamiltonian(Hamiltonian):
         then the Fock states are used (000, 100, 010, 001 ...)
         """
         labels = self._get_Fock_basis_labels(subspace, self._basis_labels)
-        if braket:
-            return add_braket(labels)
-        else:
-            return labels
+        return add_braket(labels) if braket else labels
 
     def _get_Fock_basis_labels(self, subspace, labels=None):
         labels_1exc = [10 ** (self.n_sites - i - 1) for i in range(self.n_sites)]
@@ -730,12 +724,7 @@ class VibronicHamiltonian(Hamiltonian):
         Vibronic basis labels are returned as a list of tuples:
         [(elec_basis_label, vib_basis_label), ]
         """
-
         elec_labels = self.electronic.basis_labels(subspace)
         vib_labels = self.vib_basis_labels()
-
         labels = [(e, v) for e in elec_labels for v in vib_labels] 
-        if braket:
-            return add_braket(labels)
-        else:
-            return labels
+        return add_braket(labels) if braket else labels
