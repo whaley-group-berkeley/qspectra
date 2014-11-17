@@ -6,6 +6,7 @@ import numpy as np
 from .decorators import (optional_ensemble_average,
                          optional_2nd_order_isotropic_average)
 from .utils import integrate
+from ..operator_tools import basis_transform
 
 
 @optional_ensemble_average
@@ -20,7 +21,7 @@ def _simulate_dynamics(dynamical_model, initial_state, duration, times,
 
 
 def simulate_dynamics(dynamical_model, initial_state, duration=None, times=None,
-                      liouville_subspace='ee', save_func=None,
+                      liouville_subspace='ee', save_func=None, basis='site',
                       ensemble_size=None, ensemble_random_orientations=False,
                       **integrate_kwargs):
     """
@@ -43,6 +44,9 @@ def simulate_dynamics(dynamical_model, initial_state, duration=None, times=None,
         subspace.
     save_func : function, optional
         Optional function to apply to the state vector before returning it.
+    basis : string, default 'site'
+        Either 'site' or 'exciton'. specifies the basis of the initial condition
+        and the output density matrices.
     ensemble_size : int, optional
         If provided, perform an ensemble average of this signal over Hamiltonian
         disorder, as determined by the `sample_ensemble` method of the provided
@@ -60,11 +64,32 @@ def simulate_dynamics(dynamical_model, initial_state, duration=None, times=None,
     states : np.ndarray
         Two-dimensional array of simulated state vectors at all times t.
     """
-    return _simulate_dynamics(
+
+    U = dynamical_model.hamiltonian.U(liouville_subspace[0])
+
+    if basis == 'site' and dynamical_model.evolve_basis == 'exciton':
+        initial_state = basis_transform(initial_state, U)
+
+    elif basis == 'exciton' and dynamical_model.evolve_basis == 'site':
+        initial_state = basis_transform(initial_state, U.T.conj())
+
+    t, states = _simulate_dynamics(
         dynamical_model, initial_state, duration, times, liouville_subspace,
         save_func, ensemble_size=ensemble_size,
         ensemble_random_orientations=ensemble_random_orientations,
         **integrate_kwargs)
+
+    U = dynamical_model.hamiltonian.U(liouville_subspace[1])
+
+    if basis == 'site' and dynamical_model.evolve_basis == 'exciton':
+        for state in states:
+            state[:] = basis_transform(state, U.T.conj())
+
+    elif basis == 'exciton' and dynamical_model.evolve_basis == 'site':
+        for state in states:
+            state[:] = basis_transform(state, U)
+
+    return t, states
 
 
 # since optional_2nd_order_isotropic_average needs can only be applied *before*
