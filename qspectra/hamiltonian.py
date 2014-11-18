@@ -79,12 +79,10 @@ def thermal_state(hamiltonian_matrix, temperature):
 def add_braket(basis_labels):
     braket_labels = []
     for label in basis_labels:
-        try:
-            if isinstance(label, str):
-                raise TypeError
-            braket_label = ''.join(['|{}>'.format(i) for i in label])
-        except TypeError:
+        if isinstance(label, basestring) or not np.iterable(label):
             braket_label = '|{}>'.format(label)
+        else:
+            braket_label = ''.join('|{}>'.format(i) for i in label)
         braket_labels.append(braket_label)
     return braket_labels
 
