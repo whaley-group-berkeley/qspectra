@@ -84,16 +84,6 @@ def redfield_dissipator(*args, **kwargs):
     return tensor_to_super(redfield_tensor(*args, **kwargs))
 
 
-def redfield_evolve(hamiltonian, subspace='ge', basis='site', **kwargs):
-    H = np.diag(hamiltonian.E(subspace))
-    R = redfield_dissipator(hamiltonian, subspace, **kwargs)
-    L = -1j * super_commutator_matrix(H) - R
-    if basis == 'site':
-        return basis_transform(L, hamiltonian.U(subspace).T.conj())
-    elif basis == 'exciton':
-        return L
-    else:
-        raise ValueError('invalid basis')
 
 
 class RedfieldModel(LiouvilleSpaceModel):
@@ -127,15 +117,30 @@ class RedfieldModel(LiouvilleSpaceModel):
     .. [1] Nitzan (2006)
     """
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
-                 unit_convert=1, secular=True, discard_imag_corr=False):
+                 unit_convert=1, secular=True, discard_imag_corr=False, evolve_basis='exciton'):
         super(RedfieldModel, self).__init__(hamiltonian, rw_freq,
-                                            hilbert_subspace, unit_convert)
+                                            hilbert_subspace, unit_convert, evolve_basis)
         self.secular = secular
         self.discard_imag_corr = discard_imag_corr
 
     @memoized_property
     def evolution_super_operator(self):
         return (self.unit_convert
-                * redfield_evolve(self.hamiltonian, self.hilbert_subspace,
+                * self.redfield_evolve(self.hamiltonian, self.hilbert_subspace,
                                   basis='site', secular=self.secular,
                                   discard_imag_corr=self.discard_imag_corr))
+
+    def redfield_evolve(self, hamiltonian, subspace='ge', basis='site', **kwargs):
+        H = np.diag(hamiltonian.E(subspace))
+        R = redfield_dissipator(hamiltonian, subspace, **kwargs)
+        L = -1j * super_commutator_matrix(H) - R
+        if self.evolve_basis == 'exciton':
+            return L
+        elif self.evolve_basis == 'site':
+            return basis_transform(L, hamiltonian.U(subspace).T.conj())
+        if basis == 'site':
+            return basis_transform(L, hamiltonian.U(subspace).T.conj())
+        elif basis == 'exciton':
+            return L
+        else:
+            raise ValueError('invalid basis')

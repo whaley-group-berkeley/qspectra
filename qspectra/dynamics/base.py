@@ -28,6 +28,9 @@ class DynamicalModel(object):
         set of Hilbert subspace on which to calculate the dynamics.
     unit_convert : number, optional
         Unit conversion from energy to time units (default 1).
+    evolve_basis : string, default 'exciton'
+        Either 'site' or 'exciton'. specifies whether to evolve the density
+        matrix in the site or the exciton basis.
 
     Warning
     -------
@@ -40,11 +43,12 @@ class DynamicalModel(object):
     __metaclass__ = ABCMeta
 
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
-                 unit_convert=1):
+                 unit_convert=1, evolve_basis='exciton'):
         self.hamiltonian = hamiltonian.in_rotating_frame(rw_freq)
         self.rw_freq = self.hamiltonian.rw_freq
         self.hilbert_subspace = hilbert_subspace
         self.unit_convert = unit_convert
+        self.evolve_basis = evolve_basis
 
     def __repr__(self):
         return inspect_repr(self)
