@@ -375,7 +375,7 @@ class Hamiltonian(object):
 
     def H_dataframe(self, subspace, braket=False):
         """
-        Returns the Hamiltonaian wrapped in a Pandas DataFrame. Useful for
+        Returns the Hamiltonian matrix wrapped in a Pandas DataFrame. Useful for
         pretty printing if the basis labels are defined.
         """
         import pandas as pd
