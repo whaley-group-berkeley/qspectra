@@ -12,6 +12,7 @@ from .operator_tools import (transition_operator, operator_extend, unit_vec,
                              vib_annihilate)
 from .polarization import polarization_vector, random_rotation_matrix
 from .utils import imemoize, memoized_property, check_random_state, inspect_repr
+from .operator_tools import basis_transform
 
 
 def check_hermitian(matrix):
@@ -331,33 +332,17 @@ class Hamiltonian(object):
 
     def transform_to_eigenbasis(self, rho, subspace):
         """
-        Transforms rho density matrix (or matrices) from the eigenstate basis
-        to the site basis
+        Transforms the density matrix rho from the eigenstate basis to the site basis
         """
         U = self.U(subspace)
-        if rho.shape == U.shape:
-            # rho is a density matrix
-            return basis_transform(rho, U)
-        elif rho[0].shape == U.shape:
-            # rho is a list of density matrices
-            return [basis_transform(i, U) for i in rho]
-        else:
-            raise Exception()
+        return basis_transform(rho, U)
 
     def transform_from_eigenbasis(self, rho, subspace):
         """
-        Transforms rho density matrix (or matrices) from the site basis
-        to the eigenstate basis
+        Transforms the density matrix rho from the site basis to the eigenstate basis
         """
         U = self.U(subspace).T.conj()
-        if rho.shape == U.shape:
-            # rho is a density matrix
-            return basis_transform(rho, U)
-        elif rho[0].shape == U.shape:
-            # rho is a list of density matrices
-            return [basis_transform(i, U) for i in rho]
-        else:
-            raise Exception()
+        return basis_transform(rho, U)
 
     @property
     def transition_energy(self):

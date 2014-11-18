@@ -162,6 +162,19 @@ class TestElectronicHamiltonian(unittest.TestCase, SharedTests):
         with self.assertRaises(OverflowError):
             print H_with_bath.thermal_state('gef')
 
+    def test_basis_transform(self):
+        rho = np.array([0.5, -0.5, -0.5, 0.5])
+        temp = self.H_sys.transform_to_eigenbasis(rho, 'e')
+        rho1 = self.H_sys.transform_to_eigenbasis(temp, 'e')
+        assert_allclose(rho, rho1)
+
+        rho = np.array([[0.5, 0.5], [0.5, 0.5]])
+        temp = self.H_sys.transform_to_eigenbasis(rho, 'e')
+        rho1 = self.H_sys.transform_to_eigenbasis(temp, 'e')
+        assert_allclose(rho, rho1)
+
+        # rho = np.array([0.5, 0.5, 0.5, 0.5])
+
     def test_basis_labels(self):
         self.assertEqual(self.H_sys.basis_labels('gef', braket=True), 
             ['|00>', '|10>', '|01>', '|11>'])
