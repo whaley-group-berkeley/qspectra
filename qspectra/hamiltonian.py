@@ -101,7 +101,7 @@ class Hamiltonian(object):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, energy_spread_extra=None, basis_labels=None):
+    def __init__(self, energy_spread_extra=None, site_labels=None):
         self.energy_spread_extra = energy_spread_extra
         # keep track of the non-sampled and non-rotating version of this
         # Hamiltonian for the `in_rotating_frame` and `sample` methods:
@@ -110,7 +110,7 @@ class Hamiltonian(object):
         # keep track of the rotating wave frequency, so it's possible to check
         # what rotating wave frquency has been set:
         self.rw_freq = 0
-        self._basis_labels = basis_labels
+        self.site_labels = site_labels
 
     @property
     def _original(self):
@@ -369,7 +369,7 @@ class Hamiltonian(object):
         return 1.0 / self.freq_step
 
     def basis_labels(self, subspace, braket=False):
-        return add_braket(self._basis_labels) if braket else self._basis_labels
+        return add_braket(self.site_labels) if braket else self.site_labels
 
     def H_dataframe(self, subspace, braket=False):
         """
@@ -448,7 +448,7 @@ class ElectronicHamiltonian(Hamiltonian):
         excited state transition energy.
     """
     def __init__(self, H_1exc, bath=None, dipoles=None, disorder=None,
-                 random_seed=0, energy_spread_extra=None, basis_labels=None):
+                 random_seed=0, energy_spread_extra=None, site_labels=None):
         self.H_1exc = check_hermitian(H_1exc)
         self.bath = bath
         self.dipoles = np.asarray(dipoles) if dipoles is not None else None
@@ -456,7 +456,7 @@ class ElectronicHamiltonian(Hamiltonian):
         self.random_seed = random_seed
         # used by various dynamics methods to determine indices:
         self.n_vibrational_states = 1
-        super(ElectronicHamiltonian, self).__init__(energy_spread_extra, basis_labels)
+        super(ElectronicHamiltonian, self).__init__(energy_spread_extra, site_labels)
 
     _implements_eq = True
 
@@ -545,10 +545,10 @@ class ElectronicHamiltonian(Hamiltonian):
     def basis_labels(self, subspace='gef', braket=False):
         """
         If custom labels are used but the ground state is included, then the
-        label "g" is used to represent the ground state. If _basis_labels is None,
+        label "g" is used to represent the ground state. If site_labels is None,
         then the Fock states are used (000, 100, 010, 001 ...)
         """
-        labels = self._get_Fock_basis_labels(subspace, self._basis_labels)
+        labels = self._get_Fock_basis_labels(subspace, self.site_labels)
         return add_braket(labels) if braket else labels
 
     def _get_Fock_basis_labels(self, subspace, labels=None):
@@ -596,7 +596,7 @@ class VibronicHamiltonian(Hamiltonian):
         excited state transition energy.
     """
     def __init__(self, electronic, n_vibrational_levels, vib_energies,
-                 elec_vib_couplings, energy_spread_extra=None, basis_labels=None):
+                 elec_vib_couplings, energy_spread_extra=None, site_labels=None):
         self.electronic = electronic
         self.energy_spread_extra = self.electronic.energy_spread_extra
         self.bath = self.electronic.bath
@@ -604,7 +604,7 @@ class VibronicHamiltonian(Hamiltonian):
         self.n_vibrational_levels = np.asarray(n_vibrational_levels)
         self.vib_energies = np.asarray(vib_energies)
         self.elec_vib_couplings = np.asarray(elec_vib_couplings)
-        super(VibronicHamiltonian, self).__init__(energy_spread_extra, basis_labels)
+        super(VibronicHamiltonian, self).__init__(energy_spread_extra, site_labels)
 
     _implements_eq = True
 
