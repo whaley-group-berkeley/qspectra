@@ -11,8 +11,8 @@ from ..operator_tools import basis_transform
 
 @optional_ensemble_average
 def _simulate_dynamics(dynamical_model, initial_state, duration, times,
-                       liouville_subspace, save_func, **integrate_kwargs):
-    eom = dynamical_model.equation_of_motion(liouville_subspace)
+                       liouville_subspace, save_func, sparse_matrix, **integrate_kwargs):
+    eom = dynamical_model.equation_of_motion(liouville_subspace, sparse_matrix=sparse_matrix)
     t = (np.arange(0, duration, dynamical_model.time_step)
          if times is None else times)
     states = integrate(eom, initial_state, t, save_func=save_func,
@@ -21,7 +21,7 @@ def _simulate_dynamics(dynamical_model, initial_state, duration, times,
 
 
 def simulate_dynamics(dynamical_model, initial_state, duration=None, times=None,
-                      liouville_subspace='ee', save_func=None, basis='site',
+                      liouville_subspace='ee', sparse_matrix=False, save_func=None, basis='site',
                       ensemble_size=None, ensemble_random_orientations=False,
                       **integrate_kwargs):
     """
@@ -75,7 +75,7 @@ def simulate_dynamics(dynamical_model, initial_state, duration=None, times=None,
 
     t, states = _simulate_dynamics(
         dynamical_model, initial_state, duration, times, liouville_subspace,
-        save_func, ensemble_size=ensemble_size,
+        save_func, sparse_matrix, ensemble_size=ensemble_size,
         ensemble_random_orientations=ensemble_random_orientations,
         **integrate_kwargs)
 
