@@ -329,6 +329,36 @@ class Hamiltonian(object):
         """
         return self.eig(subspace)[1]
 
+    def transform_to_eigenbasis(self, rho, subspace):
+        """
+        Transforms rho density matrix (or matrices) from the eigenstate basis
+        to the site basis
+        """
+        U = self.U(subspace)
+        if rho.shape == U.shape:
+            # rho is a density matrix
+            return basis_transform(rho, U)
+        elif rho[0].shape == U.shape:
+            # rho is a list of density matrices
+            return [basis_transform(i, U) for i in rho]
+        else:
+            raise Exception()
+
+    def transform_from_eigenbasis(self, rho, subspace):
+        """
+        Transforms rho density matrix (or matrices) from the site basis
+        to the eigenstate basis
+        """
+        U = self.U(subspace).T.conj()
+        if rho.shape == U.shape:
+            # rho is a density matrix
+            return basis_transform(rho, U)
+        elif rho[0].shape == U.shape:
+            # rho is a list of density matrices
+            return [basis_transform(i, U) for i in rho]
+        else:
+            raise Exception()
+
     @property
     def transition_energy(self):
         """
