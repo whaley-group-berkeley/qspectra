@@ -373,7 +373,7 @@ class Hamiltonian(object):
     def basis_labels(self, subspace, braket=False):
         return add_braket(self._basis_labels) if braket else self._basis_labels
 
-    def to_dataframe(self, subspace, braket=False):
+    def H_dataframe(self, subspace, braket=False):
         """
         Returns the Hamiltonaian wrapped in a Pandas DataFrame. Useful for
         pretty printing if the basis labels are defined.
@@ -382,6 +382,17 @@ class Hamiltonian(object):
         labels = self.basis_labels(subspace, braket)
         matrix = self.H(subspace)
         return pd.DataFrame(matrix, columns=labels, index=labels)
+
+    def U_dataframe(self, subspace, braket=False):
+        """
+        Returns the eigenvectors wrapped in a Pandas DataFrame. Useful for
+        pretty printing if the basis labels are defined.
+        """
+        import pandas as pd
+        labels = self.basis_labels(subspace, braket)
+        matrix = self.U(subspace)
+        energies = self.E(subspace)
+        return pd.DataFrame(matrix, columns=energies, index=labels)
 
 def diagonal_gaussian_disorder(fwhm, n_sites):
     def disorder(random_state):
