@@ -135,10 +135,8 @@ class RedfieldModel(LiouvilleSpaceModel):
         R = redfield_dissipator(hamiltonian, subspace, **kwargs)
         L = -1j * super_commutator_matrix(H) - R
         if self.evolve_basis == 'exciton':
-            print 'exciton dissipator'
             return L
         elif self.evolve_basis == 'site':
-            print 'site dissipator'
             return basis_transform(L, hamiltonian.U(subspace).T.conj())
         if basis == 'site':
             return basis_transform(L, hamiltonian.U(subspace).T.conj())
