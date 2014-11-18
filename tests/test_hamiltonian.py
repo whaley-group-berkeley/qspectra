@@ -170,7 +170,7 @@ class TestElectronicHamiltonian(unittest.TestCase, SharedTests):
 
         H_sys_labeled = hamiltonian.ElectronicHamiltonian(
         self.M, bath=None, dipoles=[[1, 0, 0], [0, 1, 0]],
-        disorder=1, energy_spread_extra=1.0, basis_labels=["one", "two"])
+        disorder=1, energy_spread_extra=1.0, site_labels=["one", "two"])
 
         self.assertEqual(H_sys_labeled.basis_labels('gef', braket=True), 
             ['|g>', '|one>', '|two>', '|one,two>'])
@@ -210,7 +210,7 @@ class TestVibronicHamiltonian(unittest.TestCase, SharedTests):
 
         H_E = hamiltonian.ElectronicHamiltonian([[1.0]], bath=DummyBath(),
                                                 dipoles=[[1, 0, 0], [0, 1, 0]],
-                                                disorder=0, basis_labels=["one"])
+                                                disorder=0, site_labels=["one"])
         H_sys_labeled = hamiltonian.VibronicHamiltonian(H_E, [2], [10], [[5]])
 
         self.assertEqual(H_sys_labeled.basis_labels('gef', braket=1), 
