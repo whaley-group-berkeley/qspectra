@@ -9,10 +9,9 @@ import scipy.linalg
 from .constants import GAUSSIAN_SD_FWHM
 from .operator_tools import (transition_operator, operator_extend, unit_vec,
                              tensor, extend_vib_operator, vib_create,
-                             vib_annihilate)
+                             vib_annihilate, basis_transform_vector)
 from .polarization import polarization_vector, random_rotation_matrix
 from .utils import imemoize, memoized_property, check_random_state, inspect_repr
-from .operator_tools import basis_transform
 
 
 def check_hermitian(matrix):
@@ -335,14 +334,14 @@ class Hamiltonian(object):
         Transforms the density matrix rho from the eigenstate basis to the site basis
         """
         U = self.U(subspace)
-        return basis_transform(rho, U)
+        return basis_transform_vector(rho, U)
 
     def transform_from_eigenbasis(self, rho, subspace):
         """
         Transforms the density matrix rho from the site basis to the eigenstate basis
         """
         U = self.U(subspace).T.conj()
-        return basis_transform(rho, U)
+        return basis_transform_vector(rho, U)
 
     @property
     def transition_energy(self):

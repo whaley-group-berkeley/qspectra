@@ -11,11 +11,18 @@ from .utils import integrate
 @optional_ensemble_average
 def _simulate_dynamics(dynamical_model, initial_state, duration, times,
                        liouville_subspace, save_func, **integrate_kwargs):
+    import time
+    start = time.time()
     eom = dynamical_model.equation_of_motion(liouville_subspace)
+    end = time.time()
+    print 'Dissipator creation time is {}'.format(end - start)
     t = (np.arange(0, duration, dynamical_model.time_step)
          if times is None else times)
+    start = time.time()
     states = integrate(eom, initial_state, t, save_func=save_func,
                        **integrate_kwargs)
+    end = time.time()
+    print 'integration time is {}'.format(end - start)
     return (t, states)
 
 
