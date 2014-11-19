@@ -20,6 +20,51 @@ def test_unit_vec():
     assert_allclose(operator_tools.unit_vec(0, 3), [1, 0, 0])
 
 
+class TestBasisTransform(unittest.TestCase):
+    def setUp(self):
+        self.U = np.array([[1, 1], [-1, 1]]) / np.sqrt(2)
+
+    def test_basis_transform_operator(self):
+        X = np.random.randn(4, 4)
+        for U in [np.eye(4), np.eye(2)]:
+            X_prime = operator_tools.basis_transform_operator(X, U)
+            assert_allclose(X, X_prime)
+        with self.assertRaises(ValueError):
+            operator_tools.basis_transform_operator(X, np.eye(3))
+        with self.assertRaises(ValueError):
+            operator_tools.basis_transform_operator(X, np.ones((1, 2)))
+
+        X = np.eye(2)
+        actual = operator_tools.basis_transform_operator(X, self.U)
+        assert_allclose(actual, X)
+
+        X = np.array([[1, -1], [-1, 1]]) / 2.0
+        actual = operator_tools.basis_transform_operator(X, self.U)
+        expected = np.array([[1, 0], [0, 0]])
+        assert_allclose(actual, expected)
+
+    def test_basis_transform_vector(self):
+        for rho in [np.random.randn(4), np.random.randn(3, 4)]:
+            for U in [np.eye(4), np.eye(2)]:
+                rho_prime = operator_tools.basis_transform_vector(rho, U)
+                assert_allclose(rho, rho_prime)
+
+        rho = np.random.randn(3)
+        U = np.ones((3, 2))
+        with self.assertRaises(ValueError):
+            operator_tools.basis_transform_vector(rho, U)
+
+        rho = [1, 0]
+        actual = operator_tools.basis_transform_vector(rho, self.U)
+        expected = np.sqrt([0.5, 0.5])
+        assert_allclose(actual, expected)
+
+        rho = [0.5, -0.5, -0.5, 0.5]
+        actual = operator_tools.basis_transform_vector(rho, self.U)
+        expected = np.array([1, 0, 0, 0])
+        assert_allclose(actual, expected)
+
+
 class TestExtendedStates(unittest.TestCase):
     def setUp(self):
         self.M = np.array([[1., 2 - 2j], [2 + 2j, 3]])
