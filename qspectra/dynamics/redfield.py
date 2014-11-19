@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..operator_tools import basis_transform
+from ..operator_tools import basis_transform_operator
 from .liouville_space import (super_commutator_matrix, tensor_to_super,
                               LiouvilleSpaceModel)
 from ..utils import memoized_property
@@ -40,7 +40,7 @@ def redfield_tensor(hamiltonian, subspace='ge', secular=True,
     n_states = hamiltonian.n_states(subspace)
     energies = hamiltonian.E(subspace)
 
-    K = [basis_transform(coupling, hamiltonian.U(subspace))
+    K = [basis_transform_operator(coupling, hamiltonian.U(subspace))
          for coupling in hamiltonian.system_bath_couplings(subspace)]
     xi = np.einsum('iab,icd->abcd', K, K)
 
@@ -89,7 +89,7 @@ def redfield_evolve(hamiltonian, subspace='ge', basis='site', **kwargs):
     R = redfield_dissipator(hamiltonian, subspace, **kwargs)
     L = -1j * super_commutator_matrix(H) - R
     if basis == 'site':
-        return basis_transform(L, hamiltonian.U(subspace).T.conj())
+        return basis_transform_operator(L, hamiltonian.U(subspace).T.conj())
     elif basis == 'exciton':
         return L
     else:
