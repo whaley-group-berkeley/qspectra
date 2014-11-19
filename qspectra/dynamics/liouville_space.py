@@ -234,6 +234,9 @@ class LiouvilleSpaceModel(DynamicalModel):
             # and:
             #     L.T.dot(rho)
             evolve_matrix = evolve_matrix.T
+        if self.sparse_matrix:
+            from scipy.sparse import csr_matrix
+            evolve_matrix = csr_matrix(evolve_matrix)
         def eom(t, rho):
             return evolve_matrix.dot(rho)
         return eom

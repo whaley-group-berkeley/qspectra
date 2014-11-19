@@ -40,11 +40,13 @@ class DynamicalModel(object):
     __metaclass__ = ABCMeta
 
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
-                 unit_convert=1):
+                 unit_convert=1, evolve_basis='exciton', sparse_matrix=False):
         self.hamiltonian = hamiltonian.in_rotating_frame(rw_freq)
         self.rw_freq = self.hamiltonian.rw_freq
         self.hilbert_subspace = hilbert_subspace
         self.unit_convert = unit_convert
+        self.evolve_basis = evolve_basis
+        self.sparse_matrix = sparse_matrix
 
     def __repr__(self):
         return inspect_repr(self)
