@@ -9,7 +9,7 @@ import scipy.linalg
 from .constants import GAUSSIAN_SD_FWHM
 from .operator_tools import (transition_operator, operator_extend, unit_vec,
                              tensor, extend_vib_operator, vib_create,
-                             vib_annihilate, basis_transform_vector)
+                             vib_annihilate, hilbert_subspace_index)
 from .polarization import polarization_vector, random_rotation_matrix
 from .utils import imemoize, memoized_property, check_random_state, inspect_repr
 
@@ -311,8 +311,19 @@ class Hamiltonian(object):
         """
         Returns the eigensystem solution E, U for the system part of this
         Hamiltonian in the given subspace
+
+        The eigenvalues E arrive in ascending order by subspace and then by
+        value, i.e., 0-excitation states followed by 1-excitation states
+        followed by 2-excitation states.
         """
-        E, U = scipy.linalg.eigh(self.H(subspace))
+        # solve the eigenvalue problem in the non-rotating basis to preserve
+        # the ordering between blocks for each number of excitations (eigh
+        # guarantees eigenvalues are returned in ascending order)
+        E, U = scipy.linalg.eigh(self._not_rotating.H(subspace))
+        if 'e' in subspace:
+            E[self.hilbert_subspace_index('e', subspace)] -= self.rw_freq
+        if 'f' in subspace:
+            E[self.hilbert_subspace_index('f', subspace)] -= 2 * self.rw_freq
         return (E, U)
 
     def E(self, subspace):
@@ -405,6 +416,26 @@ class Hamiltonian(object):
         matrix = self.U(subspace)
         energies = self.E(subspace)
         return pd.DataFrame(matrix, columns=energies, index=labels)
+
+    def hilbert_subspace_index(self, subspace, all_subspaces):
+        """
+        Given a Hilbert subspace 'g', 'e' or 'f' and the set of all subspaces on
+        which a state is defined, returns a slice object to select all elements in
+        the given subspace
+
+        Examples
+        --------
+        >>> ham = ElectronicHamiltonian(np.eye(2))
+        >>> ham.hilbert_subspace_index('g', 'gef')
+        slice(0, 1)
+        >>> ham.hilbert_subspace_index('e', 'gef')
+        slice(1, 3)
+        >>> ham.hilbert_subspace_index('f', 'gef')
+        slice(3, 4)
+        """
+        return hilbert_subspace_index(subspace, all_subspaces, self.n_sites,
+                                      self.n_vibrational_states)
+
 
 def diagonal_gaussian_disorder(fwhm, n_sites):
     def disorder(random_state):
@@ -749,5 +780,5 @@ class VibronicHamiltonian(Hamiltonian):
         """
         elec_labels = self.electronic.basis_labels(subspace)
         vib_labels = self.vib_basis_labels()
-        labels = [(e, v) for e in elec_labels for v in vib_labels] 
+        labels = [(e, v) for e in elec_labels for v in vib_labels]
         return add_braket(labels) if braket else labels
