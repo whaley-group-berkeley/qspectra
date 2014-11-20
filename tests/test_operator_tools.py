@@ -44,7 +44,9 @@ class TestBasisTransform(unittest.TestCase):
         assert_allclose(actual, expected)
 
     def test_basis_transform_vector(self):
-        for rho in [np.random.randn(4), np.random.randn(3, 4)]:
+        for rho in [np.random.randn(4),
+                    np.random.randn(3, 4),
+                    np.random.randn(1, 2, 3, 4)]:
             for U in [np.eye(4), np.eye(2)]:
                 rho_prime = operator_tools.basis_transform_vector(rho, U)
                 assert_allclose(rho, rho_prime)
