@@ -163,17 +163,13 @@ class TestElectronicHamiltonian(unittest.TestCase, SharedTests):
             print H_with_bath.thermal_state('gef')
 
     def test_basis_transform(self):
-        rho = np.array([0.5, -0.5, -0.5, 0.5])
-        temp = self.H_sys.transform_to_eigenbasis(rho, 'e')
-        rho1 = self.H_sys.transform_to_eigenbasis(temp, 'e')
-        assert_allclose(rho, rho1)
-
-        rho = np.array([[0.5, 0.5], [0.5, 0.5]])
-        temp = self.H_sys.transform_to_eigenbasis(rho, 'e')
-        rho1 = self.H_sys.transform_to_eigenbasis(temp, 'e')
-        assert_allclose(rho, rho1)
-
-        # rho = np.array([0.5, 0.5, 0.5, 0.5])
+        M = np.array([[1., 2], [2, 3]])
+        h_sys = hamiltonian.ElectronicHamiltonian(M)
+        rho_site = np.array([0.2, -0.4, -0.4, 0.8])
+        rho_eig = h_sys.transform_to_eigenbasis(rho_site, 'e')
+        assert_allclose(rho_eig, [0.7236068, 0.4472136, 0.4472136, 0.2763932])
+        rho_site2 = h_sys.transform_to_eigenbasis(rho_eig, 'e')
+        assert_allclose(rho_site, rho_site2)
 
     def test_basis_labels(self):
         self.assertEqual(self.H_sys.basis_labels('gef', braket=True), 
