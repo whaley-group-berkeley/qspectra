@@ -414,9 +414,9 @@ class Hamiltonian(object):
         >>> ham = ElectronicHamiltonian(np.eye(2))
         >>> ham.hilbert_subspace_index('g', 'gef')
         slice(0, 1)
-        >>> ham.hilbert_subspace_index('e', 'gef', 2)
+        >>> ham.hilbert_subspace_index('e', 'gef')
         slice(1, 3)
-        >>> ham.hilbert_subspace_index('f', 'gef', 2)
+        >>> ham.hilbert_subspace_index('f', 'gef')
         slice(3, 4)
         """
         return hilbert_subspace_index(subspace, all_subspaces, self.n_sites,
