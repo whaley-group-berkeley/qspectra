@@ -122,9 +122,8 @@ class DynamicalModel(object):
         return self.hamiltonian.time_step / self.unit_convert
 
     def hilbert_subspace_index(self, subspace):
-        return hilbert_subspace_index(subspace, self.hilbert_subspace,
-                                        self.hamiltonian.n_sites,
-                                        self.hamiltonian.n_vibrational_states)
+        return self.hamiltonian.hilbert_subspace_index(
+            subspace, self.hilbert_subspace)
 
 
 class SystemOperator(object):
