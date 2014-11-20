@@ -115,7 +115,7 @@ def basis_transform_vector(rho, U):
     rho = np.asarray(rho)
     U = np.asarray(U)
     U = _infer_basis_transform_matrix(rho, U)
-    return np.einsum('ij,...j->...i', U.T.conj(), rho)
+    return np.tensordot(U.T.conj(), rho.T, axes=1).T
 
 
 def all_states(N, subspace='gef'):
