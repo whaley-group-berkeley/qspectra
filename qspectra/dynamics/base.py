@@ -32,8 +32,6 @@ class DynamicalModel(object):
         Either 'site' or 'eigen'. specifies whether to calculate dynamics
         in the site basis or the system eigenstate basis.
 
-
-
     Warning
     -------
     In the current implementation of DynamicalModel, it is assumed that you can
