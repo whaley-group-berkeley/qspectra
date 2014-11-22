@@ -84,13 +84,13 @@ def redfield_dissipator(*args, **kwargs):
     return tensor_to_super(redfield_tensor(*args, **kwargs))
 
 
-def redfield_evolve(hamiltonian, subspace='ge', evolve_basis='exciton', **kwargs):
+def redfield_evolve(hamiltonian, subspace='ge', evolve_basis='site', **kwargs):
     H = np.diag(hamiltonian.E(subspace))
     R = redfield_dissipator(hamiltonian, subspace, **kwargs)
     L = -1j * super_commutator_matrix(H) - R
     if evolve_basis == 'site':
         return basis_transform_operator(L, hamiltonian.U(subspace).T.conj())
-    elif evolve_basis == 'exciton':
+    elif evolve_basis == 'eigen':
         return L
     else:
         raise ValueError('invalid basis')
@@ -127,7 +127,7 @@ class RedfieldModel(LiouvilleSpaceModel):
     .. [1] Nitzan (2006)
     """
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
-                 unit_convert=1, secular=True, discard_imag_corr=False, evolve_basis='exciton', sparse_matrix=True):
+                 unit_convert=1, secular=True, discard_imag_corr=False, evolve_basis='site', sparse_matrix=True):
         super(RedfieldModel, self).__init__(hamiltonian, rw_freq,
                                             hilbert_subspace, unit_convert, evolve_basis, sparse_matrix)
         self.secular = secular
