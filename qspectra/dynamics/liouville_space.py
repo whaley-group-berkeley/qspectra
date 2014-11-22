@@ -1,5 +1,6 @@
 import itertools
 import numpy as np
+from scipy.sparse import csr_matrix
 
 from .base import DynamicalModel, SystemOperator
 from ..operator_tools import (SubspaceError, n_excitations,
@@ -235,7 +236,6 @@ class LiouvilleSpaceModel(DynamicalModel):
             #     L.T.dot(rho)
             evolve_matrix = evolve_matrix.T
         if self.sparse_matrix:
-            from scipy.sparse import csr_matrix
             evolve_matrix = csr_matrix(evolve_matrix)
         def eom(t, rho):
             return evolve_matrix.dot(rho)
