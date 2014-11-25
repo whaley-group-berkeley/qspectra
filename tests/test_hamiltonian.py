@@ -166,9 +166,9 @@ class TestElectronicHamiltonian(unittest.TestCase, SharedTests):
         M = np.array([[1., 2], [2, 3]])
         h_sys = hamiltonian.ElectronicHamiltonian(M)
         rho_site = np.array([0.2, -0.4, -0.4, 0.8])
-        rho_eig = h_sys.transform_to_eigenbasis(rho_site, 'e')
+        rho_eig = h_sys.transform_vector_to_eigenbasis(rho_site, 'e')
         assert_allclose(rho_eig, [0.7236068, 0.4472136, 0.4472136, 0.2763932])
-        rho_site2 = h_sys.transform_to_eigenbasis(rho_eig, 'e')
+        rho_site2 = h_sys.transform_vector_to_eigenbasis(rho_eig, 'e')
         assert_allclose(rho_site, rho_site2)
 
     def test_basis_labels(self):

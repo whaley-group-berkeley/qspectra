@@ -9,7 +9,7 @@ import scipy.linalg
 from .constants import GAUSSIAN_SD_FWHM
 from .operator_tools import (transition_operator, operator_extend, unit_vec,
                              tensor, extend_vib_operator, vib_create,
-                             vib_annihilate, hilbert_subspace_index
+                             vib_annihilate, hilbert_subspace_index,
                              basis_transform_vector, basis_transform_operator)
 from .polarization import polarization_vector, random_rotation_matrix
 from .utils import imemoize, memoized_property, check_random_state, inspect_repr
