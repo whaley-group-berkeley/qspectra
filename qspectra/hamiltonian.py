@@ -9,8 +9,8 @@ import scipy.linalg
 from .constants import GAUSSIAN_SD_FWHM
 from .operator_tools import (transition_operator, operator_extend, unit_vec,
                              tensor, extend_vib_operator, vib_create,
-                             vib_annihilate, basis_transform_vector,
-                             hilbert_subspace_index)
+                             vib_annihilate, hilbert_subspace_index
+                             basis_transform_vector, basis_transform_operator)
 from .polarization import polarization_vector, random_rotation_matrix
 from .utils import imemoize, memoized_property, check_random_state, inspect_repr
 
@@ -341,19 +341,36 @@ class Hamiltonian(object):
         """
         return self.eig(subspace)[1]
 
-    def transform_to_eigenbasis(self, rho, subspace):
+    def transform_vector_to_eigenbasis(self, rho, subspace):
         """
-        Transforms the density matrix rho from the eigenstate basis to the site basis
+        Transforms a state vector or vectorized operator from the site
+        basis to the eigenstate basis
         """
         U = self.U(subspace)
         return basis_transform_vector(rho, U)
 
-    def transform_from_eigenbasis(self, rho, subspace):
+    def transform_vector_from_eigenbasis(self, rho, subspace):
         """
-        Transforms the density matrix rho from the site basis to the eigenstate basis
+        Transforms a state vector or vectorized operator from the eigenstate
+        basis to the site basis
         """
         U = self.U(subspace).T.conj()
         return basis_transform_vector(rho, U)
+
+    def transform_operator_to_eigenbasis(self, rho, subspace):
+        """
+        Transforms an operator from the site basis to the eigenstate basis
+        """
+        U = self.U(subspace)
+        return basis_transform_operator(rho, U)
+
+    def transform_operator_from_eigenbasis(self, rho, subspace):
+        """
+        Transforms an operator from the eigenstate basis to the site basis
+        """
+        U = self.U(subspace).T.conj()
+        return basis_transform_operator(rho, U)
+
 
     @property
     def transition_energy(self):
