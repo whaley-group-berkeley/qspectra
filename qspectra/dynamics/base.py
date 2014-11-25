@@ -54,6 +54,17 @@ class DynamicalModel(object):
     def __repr__(self):
         return inspect_repr(self)
 
+    @property
+    def evolve_basis(self):
+        return self._evolve_basis
+
+    @evolve_basis.setter
+    def evolve_basis(self, val):
+        if val == 'site' or val == 'eigen':
+            self._evolve_basis = val
+        else:
+            raise ValueError('invalid basis')
+
     @abstractmethod
     def thermal_state(self, liouville_subspace):
         """
