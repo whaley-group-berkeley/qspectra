@@ -1,7 +1,6 @@
 import itertools
 import numpy as np
 from scipy.sparse import csr_matrix
-
 from .base import DynamicalModel, SystemOperator
 from ..operator_tools import (SubspaceError, n_excitations,
                               full_liouville_subspace)
@@ -150,6 +149,10 @@ class LiouvilleSpaceOperator(SystemOperator):
         The dynamical model on which this operator acts.
     """
     def __init__(self, operator, liouv_subspace_map, dynamical_model):
+        if dynamical_model.evolve_basis == 'eigen':
+            operator = (dynamical_model.hamiltonian.
+                            transform_operator_to_eigenbasis(operator,
+                            dynamical_model.hilbert_subspace))
         self.operator = operator
         liouv_subspaces = (liouv_subspace_map.split('->')
                            if '->' in liouv_subspace_map
@@ -211,9 +214,13 @@ class LiouvilleSpaceModel(DynamicalModel):
     def thermal_state(self, liouville_subspace):
         rho0 = self.hamiltonian.thermal_state(liouville_subspace)
         state0 = matrix_to_ket_vec(rho0)
-        return self.map_between_subspaces(
+        rho = self.map_between_subspaces(
             state0, full_liouville_subspace(liouville_subspace),
             liouville_subspace)
+        if self.evolve_basis == 'eigen':
+            rho = self.hamiltonian.transform_vector_to_eigenbasis(rho,
+                liouville_subspace)
+        return rho
 
     @property
     def evolution_super_operator(self):
