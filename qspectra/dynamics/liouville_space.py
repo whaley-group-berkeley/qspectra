@@ -6,7 +6,6 @@ from ..operator_tools import (SubspaceError, n_excitations,
                               full_liouville_subspace)
 from ..utils import memoized_property
 
-
 def liouville_subspace_index(liouville_subspace, full_subspace, n_sites,
                              n_vibrational_states=1):
     """
@@ -243,7 +242,12 @@ class LiouvilleSpaceModel(DynamicalModel):
             #     L.T.dot(rho)
             evolve_matrix = evolve_matrix.T
         if self.sparse_matrix:
-            evolve_matrix = csr_matrix(evolve_matrix)
+            tot = evolve_matrix.shape[0] * evolve_matrix.shape[1]
+            num_zero = len(np.where(evolve_matrix == 0)[0])
+            if tot > 5000 and num_zero / tot > 0.99:
+                # overhead for sparse matrices can be large.
+                # make sure evolve_matrix is sufficinently sparse.
+                evolve_matrix = csr_matrix(evolve_matrix)
         def eom(t, rho):
             return evolve_matrix.dot(rho)
         return eom
