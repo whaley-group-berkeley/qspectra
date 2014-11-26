@@ -148,10 +148,6 @@ class LiouvilleSpaceOperator(SystemOperator):
         The dynamical model on which this operator acts.
     """
     def __init__(self, operator, liouv_subspace_map, dynamical_model):
-        if dynamical_model.evolve_basis == 'eigen':
-            operator = (dynamical_model.hamiltonian.
-                            transform_operator_to_eigenbasis(operator,
-                            dynamical_model.hilbert_subspace))
         self.operator = operator
         liouv_subspaces = (liouv_subspace_map.split('->')
                            if '->' in liouv_subspace_map
@@ -204,6 +200,20 @@ class LiouvilleSpaceModel(DynamicalModel):
     `equation_of_motion` method.
     """
     system_operator = LiouvilleSpaceOperator
+
+    def dipole_operator(self, liouv_subspace_map, polarization,
+                        transitions='-+'):
+        """
+        Return a dipole operator that follows the SystemOperator API for the
+        given liouville_subspace_map, polarization and requested transitions.
+        The operator will be defined in the same basis as self.evolve_basis
+        """
+        operator = self.hamiltonian.dipole_operator(self.hilbert_subspace,
+                                                    polarization, transitions)
+        if self.evolve_basis == 'eigen':
+            operator = self.hamiltonian.transform_operator_to_eigenbasis(
+                        operator, self.hilbert_subspace)
+        return self.system_operator(operator, liouv_subspace_map, self)
 
     def liouville_subspace_index(self, subspace):
         return liouville_subspace_index(subspace, self.hilbert_subspace,
