@@ -198,8 +198,38 @@ class LiouvilleSpaceModel(DynamicalModel):
 
     Subclasses must override the `evolution_super_operator` property or the
     `equation_of_motion` method.
+
+    Parameters
+    ----------
+    evolve_basis : string, default 'site'
+        Either 'site' or 'eigen'. Specifies whether to calculate
+        dynamics in the site basis or the system eigenstate basis.
+    sparse_matrix : bool, default 'False'
+        Specifies whether csr_matrix should be used to speed up the
+        dynamics calculation for sufficinently sparse matrices. Use
+        this in conjunction with evolve_basis='eigen'. (The site basis
+        tends to be a dense matrix)
     """
     system_operator = LiouvilleSpaceOperator
+
+    def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
+                 unit_convert=1, evolve_basis='site', sparse_matrix=False):
+        super(LiouvilleSpaceModel, self).__init__(hamiltonian, rw_freq,
+                                                  hilbert_subspace,
+                                                  unit_convert)
+        self.evolve_basis = evolve_basis
+        self.sparse_matrix = sparse_matrix
+
+    @property
+    def evolve_basis(self):
+        return self._evolve_basis
+
+    @evolve_basis.setter
+    def evolve_basis(self, val):
+        if val == 'site' or val == 'eigen':
+            self._evolve_basis = val
+        else:
+            raise ValueError('invalid basis')
 
     def dipole_operator(self, liouv_subspace_map, polarization,
                         transitions='-+'):

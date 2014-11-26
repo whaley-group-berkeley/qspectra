@@ -28,9 +28,6 @@ class DynamicalModel(object):
         set of Hilbert subspace on which to calculate the dynamics.
     unit_convert : number, optional
         Unit conversion from energy to time units (default 1).
-    evolve_basis : string, default 'site'
-        Either 'site' or 'eigen'. specifies whether to calculate dynamics
-        in the site basis or the system eigenstate basis.
 
     Warning
     -------
@@ -43,27 +40,14 @@ class DynamicalModel(object):
     __metaclass__ = ABCMeta
 
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
-                 unit_convert=1, evolve_basis='site', sparse_matrix=False):
+                 unit_convert=1):
         self.hamiltonian = hamiltonian.in_rotating_frame(rw_freq)
         self.rw_freq = self.hamiltonian.rw_freq
         self.hilbert_subspace = hilbert_subspace
         self.unit_convert = unit_convert
-        self.evolve_basis = evolve_basis
-        self.sparse_matrix = sparse_matrix
 
     def __repr__(self):
         return inspect_repr(self)
-
-    @property
-    def evolve_basis(self):
-        return self._evolve_basis
-
-    @evolve_basis.setter
-    def evolve_basis(self, val):
-        if val == 'site' or val == 'eigen':
-            self._evolve_basis = val
-        else:
-            raise ValueError('invalid basis')
 
     @abstractmethod
     def thermal_state(self, liouville_subspace):
