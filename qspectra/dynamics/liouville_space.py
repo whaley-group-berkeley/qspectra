@@ -204,16 +204,18 @@ class LiouvilleSpaceModel(DynamicalModel):
     evolve_basis : string, default 'site'
         Either 'site' or 'eigen'. Specifies whether to calculate
         dynamics in the site basis or the system eigenstate basis.
-    sparse_matrix : bool, default 'False'
+    sparse_matrix : string or bool, default 'optimal'
         Specifies whether csr_matrix should be used to speed up the
         dynamics calculation for sufficinently sparse matrices. Use
         this in conjunction with evolve_basis='eigen'. (The site basis
-        tends to be a dense matrix)
+        tends to be a dense matrix). If set to 'optimal', the sparsity
+        of the equation of motion matrix will be checked to determine
+        the use of csr_matrix
     """
     system_operator = LiouvilleSpaceOperator
 
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
-                 unit_convert=1, evolve_basis='site', sparse_matrix=False):
+                 unit_convert=1, evolve_basis='site', sparse_matrix='optimal'):
         super(LiouvilleSpaceModel, self).__init__(hamiltonian, rw_freq,
                                                   hilbert_subspace,
                                                   unit_convert)
@@ -281,7 +283,9 @@ class LiouvilleSpaceModel(DynamicalModel):
             # and:
             #     L.T.dot(rho)
             evolve_matrix = evolve_matrix.T
-        if self.sparse_matrix:
+        if self.sparse_matrix == True:
+            evolve_matrix = csr_matrix(evolve_matrix)
+        elif self.sparse_matrix == 'optimal':
             tot = evolve_matrix.size
             frac_zero = np.mean(evolve_matrix == 0)
             if tot > 5000 and frac_zero > 0.99:
