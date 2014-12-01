@@ -257,8 +257,8 @@ class LiouvilleSpaceModel(DynamicalModel):
             state0, full_liouville_subspace(liouville_subspace),
             liouville_subspace)
         if self.evolve_basis == 'eigen':
-            rho = self.hamiltonian.transform_vector_to_eigenbasis(rho,
-                liouville_subspace)
+            rho = self.hamiltonian.transform_vector_to_eigenbasis(
+                rho, liouville_subspace)
         return rho
 
     @property
@@ -282,9 +282,9 @@ class LiouvilleSpaceModel(DynamicalModel):
             #     L.T.dot(rho)
             evolve_matrix = evolve_matrix.T
         if self.sparse_matrix:
-            tot = evolve_matrix.shape[0] * evolve_matrix.shape[1]
-            num_zero = len(np.where(evolve_matrix == 0)[0])
-            if tot > 5000 and num_zero / tot > 0.99:
+            tot = evolve_matrix.size
+            frac_zero = np.mean(evolve_matrix == 0)
+            if tot > 5000 and frac_zero > 0.99:
                 # overhead for sparse matrices can be large.
                 # make sure evolve_matrix is sufficinently sparse.
                 evolve_matrix = csr_matrix(evolve_matrix)
