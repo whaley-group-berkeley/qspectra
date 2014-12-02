@@ -185,7 +185,8 @@ def impulsive_probe(dynamical_model, state, time_max, polarization='xx',
     dynamical_model : DynamicalModel
         Object obeying the DynamicModel interface.
     state : np.ndarray
-        State vector(s) for the system at the time of the probe pulse.
+        State vector(s) for the system at the time of the probe pulse. This
+        should be defined in the same basis as dynamical model.
     time_max : number
         Maximum time for which to simulate dynamics between the probe and signal
         interactions.

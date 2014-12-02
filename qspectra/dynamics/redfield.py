@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..operator_tools import basis_transform
+from ..operator_tools import basis_transform_operator
 from .liouville_space import (super_commutator_matrix, tensor_to_super,
                               LiouvilleSpaceModel)
 from ..utils import memoized_property
@@ -40,7 +40,7 @@ def redfield_tensor(hamiltonian, subspace='ge', secular=True,
     n_states = hamiltonian.n_states(subspace)
     energies = hamiltonian.E(subspace)
 
-    K = [basis_transform(coupling, hamiltonian.U(subspace))
+    K = [basis_transform_operator(coupling, hamiltonian.U(subspace))
          for coupling in hamiltonian.system_bath_couplings(subspace)]
     xi = np.einsum('iab,icd->abcd', K, K)
 
@@ -84,13 +84,13 @@ def redfield_dissipator(*args, **kwargs):
     return tensor_to_super(redfield_tensor(*args, **kwargs))
 
 
-def redfield_evolve(hamiltonian, subspace='ge', basis='site', **kwargs):
+def redfield_evolve(hamiltonian, subspace='ge', evolve_basis='site', **kwargs):
     H = np.diag(hamiltonian.E(subspace))
     R = redfield_dissipator(hamiltonian, subspace, **kwargs)
     L = -1j * super_commutator_matrix(H) - R
-    if basis == 'site':
-        return basis_transform(L, hamiltonian.U(subspace).T.conj())
-    elif basis == 'exciton':
+    if evolve_basis == 'site':
+        return basis_transform_operator(L, hamiltonian.U(subspace).T.conj())
+    elif evolve_basis == 'eigen':
         return L
     else:
         raise ValueError('invalid basis')
@@ -127,9 +127,11 @@ class RedfieldModel(LiouvilleSpaceModel):
     .. [1] Nitzan (2006)
     """
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
-                 unit_convert=1, secular=True, discard_imag_corr=False):
+                 unit_convert=1, secular=True, discard_imag_corr=False,
+                evolve_basis='site', sparse_matrix=False):
         super(RedfieldModel, self).__init__(hamiltonian, rw_freq,
-                                            hilbert_subspace, unit_convert)
+                                            hilbert_subspace, unit_convert,
+                                            evolve_basis, sparse_matrix)
         self.secular = secular
         self.discard_imag_corr = discard_imag_corr
 
@@ -137,5 +139,6 @@ class RedfieldModel(LiouvilleSpaceModel):
     def evolution_super_operator(self):
         return (self.unit_convert
                 * redfield_evolve(self.hamiltonian, self.hilbert_subspace,
-                                  basis='site', secular=self.secular,
+                                  evolve_basis=self.evolve_basis,
+                                  secular=self.secular,
                                   discard_imag_corr=self.discard_imag_corr))

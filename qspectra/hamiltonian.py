@@ -9,7 +9,8 @@ import scipy.linalg
 from .constants import GAUSSIAN_SD_FWHM
 from .operator_tools import (transition_operator, operator_extend, unit_vec,
                              tensor, extend_vib_operator, vib_create,
-                             vib_annihilate)
+                             vib_annihilate, hilbert_subspace_index,
+                             basis_transform_vector, basis_transform_operator)
 from .polarization import polarization_vector, random_rotation_matrix
 from .utils import imemoize, memoized_property, check_random_state, inspect_repr
 
@@ -79,12 +80,10 @@ def thermal_state(hamiltonian_matrix, temperature):
 def add_braket(basis_labels):
     braket_labels = []
     for label in basis_labels:
-        try:
-            if isinstance(label, str):
-                raise TypeError
-            braket_label = ''.join(['|{}>'.format(i) for i in label])
-        except TypeError:
+        if isinstance(label, basestring) or not np.iterable(label):
             braket_label = '|{}>'.format(label)
+        else:
+            braket_label = ''.join('|{}>'.format(i) for i in label)
         braket_labels.append(braket_label)
     return braket_labels
 
@@ -103,7 +102,7 @@ class Hamiltonian(object):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, energy_spread_extra=None, basis_labels=None):
+    def __init__(self, energy_spread_extra=None, site_labels=None):
         self.energy_spread_extra = energy_spread_extra
         # keep track of the non-sampled and non-rotating version of this
         # Hamiltonian for the `in_rotating_frame` and `sample` methods:
@@ -112,7 +111,7 @@ class Hamiltonian(object):
         # keep track of the rotating wave frequency, so it's possible to check
         # what rotating wave frquency has been set:
         self.rw_freq = 0
-        self._basis_labels = basis_labels
+        self.site_labels = site_labels
 
     @property
     def _original(self):
@@ -313,8 +312,19 @@ class Hamiltonian(object):
         """
         Returns the eigensystem solution E, U for the system part of this
         Hamiltonian in the given subspace
+
+        The eigenvalues E arrive in ascending order by subspace and then by
+        value, i.e., 0-excitation states followed by 1-excitation states
+        followed by 2-excitation states.
         """
-        E, U = scipy.linalg.eigh(self.H(subspace))
+        # solve the eigenvalue problem in the non-rotating basis to preserve
+        # the ordering between blocks for each number of excitations (eigh
+        # guarantees eigenvalues are returned in ascending order)
+        E, U = scipy.linalg.eigh(self._not_rotating.H(subspace))
+        if 'e' in subspace:
+            E[self.hilbert_subspace_index('e', subspace)] -= self.rw_freq
+        if 'f' in subspace:
+            E[self.hilbert_subspace_index('f', subspace)] -= 2 * self.rw_freq
         return (E, U)
 
     def E(self, subspace):
@@ -330,6 +340,37 @@ class Hamiltonian(object):
         from the site to the energy eigen-basis
         """
         return self.eig(subspace)[1]
+
+    def transform_vector_to_eigenbasis(self, rho, subspace):
+        """
+        Transforms a state vector or vectorized operator from the site
+        basis to the eigenstate basis
+        """
+        U = self.U(subspace)
+        return basis_transform_vector(rho, U)
+
+    def transform_vector_from_eigenbasis(self, rho, subspace):
+        """
+        Transforms a state vector or vectorized operator from the eigenstate
+        basis to the site basis
+        """
+        U = self.U(subspace).T.conj()
+        return basis_transform_vector(rho, U)
+
+    def transform_operator_to_eigenbasis(self, rho, subspace):
+        """
+        Transforms an operator from the site basis to the eigenstate basis
+        """
+        U = self.U(subspace)
+        return basis_transform_operator(rho, U)
+
+    def transform_operator_from_eigenbasis(self, rho, subspace):
+        """
+        Transforms an operator from the eigenstate basis to the site basis
+        """
+        U = self.U(subspace).T.conj()
+        return basis_transform_operator(rho, U)
+
 
     @property
     def transition_energy(self):
@@ -371,17 +412,48 @@ class Hamiltonian(object):
         return 1.0 / self.freq_step
 
     def basis_labels(self, subspace, braket=False):
-        return add_braket(self._basis_labels) if braket else self._basis_labels
+        return add_braket(self.site_labels) if braket else self.site_labels
 
-    def to_dataframe(self, subspace, braket=False):
+    def H_dataframe(self, subspace, braket=False):
         """
-        Returns the Hamiltonaian wrapped in a Pandas DataFrame. Useful for
+        Returns the Hamiltonian matrix wrapped in a Pandas DataFrame. Useful for
         pretty printing if the basis labels are defined.
         """
         import pandas as pd
         labels = self.basis_labels(subspace, braket)
         matrix = self.H(subspace)
         return pd.DataFrame(matrix, columns=labels, index=labels)
+
+    def U_dataframe(self, subspace, braket=False):
+        """
+        Returns the eigenvectors wrapped in a Pandas DataFrame. Useful for
+        pretty printing if the basis labels are defined.
+        """
+        import pandas as pd
+        labels = self.basis_labels(subspace, braket)
+        matrix = self.U(subspace)
+        energies = self.E(subspace)
+        return pd.DataFrame(matrix, columns=energies, index=labels)
+
+    def hilbert_subspace_index(self, subspace, all_subspaces):
+        """
+        Given a Hilbert subspace 'g', 'e' or 'f' and the set of all subspaces on
+        which a state is defined, returns a slice object to select all elements in
+        the given subspace
+
+        Examples
+        --------
+        >>> ham = ElectronicHamiltonian(np.eye(2))
+        >>> ham.hilbert_subspace_index('g', 'gef')
+        slice(0, 1)
+        >>> ham.hilbert_subspace_index('e', 'gef')
+        slice(1, 3)
+        >>> ham.hilbert_subspace_index('f', 'gef')
+        slice(3, 4)
+        """
+        return hilbert_subspace_index(subspace, all_subspaces, self.n_sites,
+                                      self.n_vibrational_states)
+
 
 def diagonal_gaussian_disorder(fwhm, n_sites):
     def disorder(random_state):
@@ -439,7 +511,7 @@ class ElectronicHamiltonian(Hamiltonian):
         excited state transition energy.
     """
     def __init__(self, H_1exc, bath=None, dipoles=None, disorder=None,
-                 random_seed=0, energy_spread_extra=None, basis_labels=None):
+                 random_seed=0, energy_spread_extra=None, site_labels=None):
         self.H_1exc = check_hermitian(H_1exc)
         self.bath = bath
         self.dipoles = np.asarray(dipoles) if dipoles is not None else None
@@ -447,7 +519,7 @@ class ElectronicHamiltonian(Hamiltonian):
         self.random_seed = random_seed
         # used by various dynamics methods to determine indices:
         self.n_vibrational_states = 1
-        super(ElectronicHamiltonian, self).__init__(energy_spread_extra, basis_labels)
+        super(ElectronicHamiltonian, self).__init__(energy_spread_extra, site_labels)
 
     _implements_eq = True
 
@@ -536,10 +608,10 @@ class ElectronicHamiltonian(Hamiltonian):
     def basis_labels(self, subspace='gef', braket=False):
         """
         If custom labels are used but the ground state is included, then the
-        label "g" is used to represent the ground state. If _basis_labels is None,
+        label "g" is used to represent the ground state. If site_labels is None,
         then the Fock states are used (000, 100, 010, 001 ...)
         """
-        labels = self._get_Fock_basis_labels(subspace, self._basis_labels)
+        labels = self._get_Fock_basis_labels(subspace, self.site_labels)
         return add_braket(labels) if braket else labels
 
     def _get_Fock_basis_labels(self, subspace, labels=None):
@@ -587,7 +659,7 @@ class VibronicHamiltonian(Hamiltonian):
         excited state transition energy.
     """
     def __init__(self, electronic, n_vibrational_levels, vib_energies,
-                 elec_vib_couplings, energy_spread_extra=None, basis_labels=None):
+                 elec_vib_couplings, energy_spread_extra=None, site_labels=None):
         self.electronic = electronic
         self.energy_spread_extra = self.electronic.energy_spread_extra
         self.bath = self.electronic.bath
@@ -595,7 +667,7 @@ class VibronicHamiltonian(Hamiltonian):
         self.n_vibrational_levels = np.asarray(n_vibrational_levels)
         self.vib_energies = np.asarray(vib_energies)
         self.elec_vib_couplings = np.asarray(elec_vib_couplings)
-        super(VibronicHamiltonian, self).__init__(energy_spread_extra, basis_labels)
+        super(VibronicHamiltonian, self).__init__(energy_spread_extra, site_labels)
 
     _implements_eq = True
 
@@ -726,5 +798,5 @@ class VibronicHamiltonian(Hamiltonian):
         """
         elec_labels = self.electronic.basis_labels(subspace)
         vib_labels = self.vib_basis_labels()
-        labels = [(e, v) for e in elec_labels for v in vib_labels] 
+        labels = [(e, v) for e in elec_labels for v in vib_labels]
         return add_braket(labels) if braket else labels
