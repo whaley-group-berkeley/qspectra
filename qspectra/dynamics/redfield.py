@@ -128,7 +128,7 @@ class RedfieldModel(LiouvilleSpaceModel):
     """
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
                  unit_convert=1, secular=True, discard_imag_corr=False,
-                evolve_basis='site', sparse_matrix=False):
+                 evolve_basis='site', sparse_matrix='optimal'):
         super(RedfieldModel, self).__init__(hamiltonian, rw_freq,
                                             hilbert_subspace, unit_convert,
                                             evolve_basis, sparse_matrix)
