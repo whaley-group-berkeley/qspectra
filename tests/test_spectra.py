@@ -45,13 +45,6 @@ class TestRedfieldDimer(unittest.TestCase):
         for basis, sp in itertools.product(['site', 'eigen'], [False, True]):
             model = self.get_model(basis, sp)
             f, X = absorption_spectra(model, 10000)
-
-            # TODO: figure out what these tests mean
-            self.assertAlmostEqual(f[np.argmax(X)], 12945.1203943)
-            self.assertTrue(is_constant(np.diff(f)))
-            self.assertFalse(np.all(np.diff(X)[:int(len(X) / 2.0 - 1)] > 0))
-            self.assertFalse(np.all(np.diff(X)[-int(len(X) / 2.0 - 1):] < 0))
-
             linear_responses.append(X)
 
         test_response = linear_responses.pop()
