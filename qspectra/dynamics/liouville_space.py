@@ -201,10 +201,10 @@ class LiouvilleSpaceModel(DynamicalModel):
 
     Parameters
     ----------
-    evolve_basis : string, default 'site'
+    evolve_basis : string, optional
         Either 'site' or 'eigen'. Specifies whether to calculate
         dynamics in the site basis or the system eigenstate basis.
-    sparse_matrix : string or bool, default 'optimal'
+    sparse_matrix : string or bool, optional
         Specifies whether csr_matrix should be used to speed up the
         dynamics calculation for sufficinently sparse matrices. Use
         this in conjunction with evolve_basis='eigen'. (The site basis
