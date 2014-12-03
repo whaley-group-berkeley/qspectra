@@ -1,11 +1,10 @@
 import itertools
 import numpy as np
-
+from scipy.sparse import csr_matrix
 from .base import DynamicalModel, SystemOperator
 from ..operator_tools import (SubspaceError, n_excitations,
                               full_liouville_subspace)
 from ..utils import memoized_property
-
 
 def liouville_subspace_index(liouville_subspace, full_subspace, n_sites,
                              n_vibrational_states=1):
@@ -133,22 +132,22 @@ def super_right_matrix(operator):
 
 
 class LiouvilleSpaceOperator(SystemOperator):
+    """
+    Parameters
+    ----------
+    operator : np.ndarray
+        Matrix representation of the operator in the Hilbert subspace of
+        `dynamical_model`.
+    liouv_subspace_map : string
+        String in the form 'eg,fe->gg,ee' indicating the mapping between
+        Liouville subspaces on which the operator should act. Optionally,
+        only one Liouville subspace may be provided (e.g., a string of the
+        form 'eg,fe'), in which case the super operator is assumed to map
+        from and to the same subspace.
+    dynamical_model : LiouvilleSpaceModel
+        The dynamical model on which this operator acts.
+    """
     def __init__(self, operator, liouv_subspace_map, dynamical_model):
-        """
-        Parameters
-        ----------
-        operator : np.ndarray
-            Matrix representation of the operator in the Hilbert subspace of
-            `dynamical_model`.
-        liouv_subspace_map : string
-            String in the form 'eg,fe->gg,ee' indicating the mapping between
-            Liouville subspaces on which the operator should act. Optionally,
-            only one Liouville subspace may be provided (e.g., a string of the
-            form 'eg,fe'), in which case the super operator is assumed to map
-            from and to the same subspace.
-        dynamical_model : LiouvilleSpaceModel
-            The dynamical model on which this operator acts.
-        """
         self.operator = operator
         liouv_subspaces = (liouv_subspace_map.split('->')
                            if '->' in liouv_subspace_map
@@ -199,8 +198,54 @@ class LiouvilleSpaceModel(DynamicalModel):
 
     Subclasses must override the `evolution_super_operator` property or the
     `equation_of_motion` method.
+
+    Parameters
+    ----------
+    evolve_basis : string, optional
+        Either 'site' or 'eigen'. Specifies whether to calculate
+        dynamics in the site basis or the system eigenstate basis.
+    sparse_matrix : string or bool, optional
+        Specifies whether csr_matrix should be used to speed up the
+        dynamics calculation for sufficinently sparse matrices. Use
+        this in conjunction with evolve_basis='eigen'. (The site basis
+        tends to be a dense matrix). If set to 'optimal', the sparsity
+        of the equation of motion matrix will be checked to determine
+        the use of csr_matrix
     """
     system_operator = LiouvilleSpaceOperator
+
+    def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
+                 unit_convert=1, evolve_basis='site', sparse_matrix='optimal'):
+        super(LiouvilleSpaceModel, self).__init__(hamiltonian, rw_freq,
+                                                  hilbert_subspace,
+                                                  unit_convert)
+        self.evolve_basis = evolve_basis
+        self.sparse_matrix = sparse_matrix
+
+    @property
+    def evolve_basis(self):
+        return self._evolve_basis
+
+    @evolve_basis.setter
+    def evolve_basis(self, val):
+        if val == 'site' or val == 'eigen':
+            self._evolve_basis = val
+        else:
+            raise ValueError('invalid basis')
+
+    def dipole_operator(self, liouv_subspace_map, polarization,
+                        transitions='-+'):
+        """
+        Return a dipole operator that follows the SystemOperator API for the
+        given liouville_subspace_map, polarization and requested transitions.
+        The operator will be defined in the same basis as self.evolve_basis
+        """
+        operator = self.hamiltonian.dipole_operator(self.hilbert_subspace,
+                                                    polarization, transitions)
+        if self.evolve_basis == 'eigen':
+            operator = self.hamiltonian.transform_operator_to_eigenbasis(
+                        operator, self.hilbert_subspace)
+        return self.system_operator(operator, liouv_subspace_map, self)
 
     def liouville_subspace_index(self, subspace):
         return liouville_subspace_index(subspace, self.hilbert_subspace,
@@ -210,9 +255,13 @@ class LiouvilleSpaceModel(DynamicalModel):
     def thermal_state(self, liouville_subspace):
         rho0 = self.hamiltonian.thermal_state(liouville_subspace)
         state0 = matrix_to_ket_vec(rho0)
-        return self.map_between_subspaces(
+        rho = self.map_between_subspaces(
             state0, full_liouville_subspace(liouville_subspace),
             liouville_subspace)
+        if self.evolve_basis == 'eigen':
+            rho = self.hamiltonian.transform_vector_to_eigenbasis(
+                rho, liouville_subspace)
+        return rho
 
     @property
     def evolution_super_operator(self):
@@ -234,6 +283,15 @@ class LiouvilleSpaceModel(DynamicalModel):
             # and:
             #     L.T.dot(rho)
             evolve_matrix = evolve_matrix.T
+        if self.sparse_matrix == True:
+            evolve_matrix = csr_matrix(evolve_matrix)
+        elif self.sparse_matrix == 'optimal':
+            tot = evolve_matrix.size
+            frac_zero = np.mean(evolve_matrix == 0)
+            if tot > 5000 and frac_zero > 0.99:
+                # overhead for sparse matrices can be large.
+                # make sure evolve_matrix is sufficinently sparse.
+                evolve_matrix = csr_matrix(evolve_matrix)
         def eom(t, rho):
             return evolve_matrix.dot(rho)
         return eom

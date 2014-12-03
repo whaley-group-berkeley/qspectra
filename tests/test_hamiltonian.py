@@ -61,7 +61,7 @@ class SharedTests(object):
         for state in (self.H_sys.ground_state('gef'),
                       self.H_sys.thermal_state('gef')):
             hamiltonian.check_hermitian(state)
-            self.assertEqual(np.trace(state), 1)
+            self.assertAlmostEqual(np.trace(state), 1)
 
 
 class DummyBath(object):
@@ -118,7 +118,7 @@ class TestElectronicHamiltonian(unittest.TestCase, SharedTests):
     def test_rw_properties(self):
         H_rw = self.H_sys.in_rotating_frame()
         assert_allclose(H_rw.H('e'), [[-1, 0], [0, 1]])
-        self.assertItemsEqual(H_rw.E('gef'), [0, 1, -1, 0])
+        assert_allclose(H_rw.E('gef'), [0, -1, 1, 0])
         self.assertEqual(H_rw.transition_energy, 0)
         self.assertEqual(H_rw.freq_step, 4.0)
         assert_allclose(self.H_sys.in_rotating_frame(3).H('e'),
@@ -162,6 +162,29 @@ class TestElectronicHamiltonian(unittest.TestCase, SharedTests):
         with self.assertRaises(OverflowError):
             print H_with_bath.thermal_state('gef')
 
+    def test_basis_transform(self):
+        M = np.array([[1., 2], [2, 3]])
+        h_sys = hamiltonian.ElectronicHamiltonian(M)
+        rho_site = np.array([0.2, -0.4, -0.4, 0.8])
+        rho_eig = h_sys.transform_vector_to_eigenbasis(rho_site, 'e')
+        assert_allclose(rho_eig, [0.7236068, 0.4472136, 0.4472136, 0.2763932])
+        rho_site2 = h_sys.transform_vector_to_eigenbasis(rho_eig, 'e')
+        assert_allclose(rho_site, rho_site2)
+
+    def test_basis_labels(self):
+        self.assertEqual(self.H_sys.basis_labels('gef', braket=True),
+            ['|00>', '|10>', '|01>', '|11>'])
+        self.assertEqual(self.H_sys.basis_labels('gef'),
+            ['00', '10', '01', '11'])
+
+        H_sys_labeled = hamiltonian.ElectronicHamiltonian(
+        self.M, bath=None, dipoles=[[1, 0, 0], [0, 1, 0]],
+        disorder=1, energy_spread_extra=1.0, site_labels=["one", "two"])
+
+        self.assertEqual(H_sys_labeled.basis_labels('gef', braket=True),
+            ['|g>', '|one>', '|two>', '|one,two>'])
+        self.assertEqual(H_sys_labeled.basis_labels('gef'),
+            ['g', 'one', 'two', 'one,two'])
 
 class TestVibronicHamiltonian(unittest.TestCase, SharedTests):
     def setUp(self):
@@ -187,3 +210,20 @@ class TestVibronicHamiltonian(unittest.TestCase, SharedTests):
         assert_allclose(self.H_sys.system_bath_couplings('ge'),
                         [[[0, 0, 0, 0], [0, 0, 0, 0],
                           [0, 0, 1, 0], [0, 0, 0, 1]]])
+
+    def test_basis_labels(self):
+        self.assertEqual(self.H_sys.basis_labels('gef', braket=1),
+            ['|0>|0>', '|0>|1>', '|1>|0>', '|1>|1>'])
+        self.assertEqual(self.H_sys.basis_labels('gef'),
+            [('0', '0'), ('0', '1'), ('1', '0'), ('1', '1')])
+
+        H_E = hamiltonian.ElectronicHamiltonian([[1.0]], bath=DummyBath(),
+                                                dipoles=[[1, 0, 0], [0, 1, 0]],
+                                                disorder=0, site_labels=["one"])
+        H_sys_labeled = hamiltonian.VibronicHamiltonian(H_E, [2], [10], [[5]])
+
+        self.assertEqual(H_sys_labeled.basis_labels('gef', braket=1),
+            ['|g>|0>', '|g>|1>', '|one>|0>', '|one>|1>'])
+        self.assertEqual(H_sys_labeled.basis_labels('gef'),
+            [('g', '0'), ('g', '1'), ('one', '0'), ('one', '1')])
+

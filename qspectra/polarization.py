@@ -16,6 +16,7 @@ def polarization_vector(p):
     Cast a polarization into a 3D vector of floats
 
     Valid polarizations include:
+
     - Strings 'x', 'y' or 'z', interepreted as the respective unit vectors
     - Single numbers, interpreted as angles of rotation from [1, 0, 0] in the
       x-y plane
@@ -48,6 +49,7 @@ FOURTH_ORDER_INVARIANTS = [((0, 1), (2, 3)),
 
 
 MAGIC_ANGLE = np.arccos(1 / np.sqrt(3))
+r"""The Magic Angle :math:`\approx 54.7\degree` in radians"""
 
 
 def invariant_weights_4th_order(polarizations):
@@ -57,10 +59,10 @@ def invariant_weights_4th_order(polarizations):
     which to sum the invariants in order to determine the isotropic average
     for this set of polarizations
 
-    Reference
-    ---------
-    Hochstrasser, R. M. Two-dimensional IR-spectroscopy: polarization anisotropy
-    effects. Chem. Phys. 266, 273-284 (2001).
+    References
+    ----------
+    .. [1] Hochstrasser, R. M. Two-dimensional IR-spectroscopy: polarization
+       anisotropy effects. Chem. Phys. 266, 273-284 (2001).
     """
     polarizations = check_polarizations(polarizations, 4)
     cosines = np.einsum('ni,mi->nm', polarizations, polarizations)
@@ -88,8 +90,8 @@ def random_rotation_matrix(random_state=None):
 
     Reference
     ---------
-    Arvo, J. Fast Random Rotation Matrices in Graphics Gems III 117-120
-    (Academic Press Professional, Inc., 1992).
+    .. [1] Arvo, J. Fast Random Rotation Matrices in Graphics Gems III 117-120
+       (Academic Press Professional, Inc., 1992).
     """
     x1, x2, x3 = check_random_state(random_state).rand(3)
     theta = 2 * pi * x1

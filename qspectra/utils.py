@@ -57,12 +57,10 @@ class imemoize(object):
     from a given method invocation will be cached on the instance whose method
     was invoked. All arguments passed to the decorated method decorated must be
     be hashable.
-
-    Source (MIT Licensed)
-    ---------------------
-        http://code.activestate.com/recipes/
-        577452-a-memoize-decorator-for-instance-methods/
     """
+    # Source (MIT Licensed):
+    # http://code.activestate.com/recipes/577452-a-memoize-decorator-for-instance-methods/
+
     def __init__(self, func):
         self.func = func
 

@@ -39,37 +39,83 @@ def unit_vec(n, N, dtype=complex):
     return v
 
 
-def basis_transform(X, U):
-    """
-    Transform X, a state vector, operator, vectorized operator or super-
-    operator, into the basis given by the unitary transformation matrix U
-
-    How to apply the transformation is inferred by the dimensions of X and U.
-
-    Reference
-    ---------
-    Havel, T. F. Robust procedures for converting among Lindblad, Kraus and
-    matrix representations of quantum dynamical semigroups. J Math. Phys.
-    44, 534-557 (2003).
-    """
+def _infer_basis_transform_matrix(X, U):
+    if U.ndim != 2 or U.shape[0] != U.shape[1]:
+        raise ValueError('basis transformation must be a square matrix')
     N = len(U)
-    if X.shape == (N,):
-        # X is a vector in Hilbert space
-        return U.T.conj().dot(X)
-    elif X.shape == (N, N):
-        # X is an operator
-        return U.T.conj().dot(X).dot(U)
-    elif X.shape[0] == N ** 2:
-        # X is in Liouville space
-        U_S = np.kron(U, U)
-        if X.shape == (N ** 2,):
-            # X is a vectorized operator
-            return U_S.T.conj().dot(X)
-        elif X.shape == (N ** 2, N ** 2):
-            # X is a super-operator
-            return U_S.T.conj().dot(X).dot(U_S)
-    raise ValueError('basis transformation incompatible with '
-                     'operator dimensions')
+    if X.shape[-1] == N:
+        # Hilbert space
+        pass
+    elif X.shape[-1] == N ** 2:
+        # Liouville space
+        U = np.kron(U, U)
+    else:
+        raise ValueError('basis transformation incompatible with '
+                         'operator dimensions')
+    return U
+
+
+def basis_transform_operator(X, U):
+    """
+    Transform the operator or super-operator X into the basis given by the
+    unitary transformation matrix U
+
+    Parameters
+    ----------
+    X : np.ndarray
+        Operator as a matrix in Hilbert or Liouville space (must be 2d).
+    U : np.ndarray
+        Basis transformation matrix in Hilbert space (must be 2d).
+
+    Returns
+    -------
+    X_prime : np.ndarray
+        The operator reexpressed in the transformed basis.
+
+    References
+    ----------
+    .. [1] Havel, T. F. Robust procedures for converting among Lindblad, Kraus
+       and matrix representations of quantum dynamical semigroups. J Math. Phys.
+       44, 534-557 (2003).
+    """
+    X = np.asarray(X)
+    U = np.asarray(U)
+    if X.ndim != 2:
+        raise ValueError('operator must have ndim=2')
+    U = _infer_basis_transform_matrix(X, U)
+    return U.T.conj().dot(X).dot(U)
+
+
+def basis_transform_vector(rho, U):
+    """
+    Transform the state vector rho into the basis given by the unitary
+    transformation matrix U
+
+    If rho is a multi-dimensional array, this function broadcasts over all
+    dimensions other than the last one.
+
+    Parameters
+    ----------
+    rho : np.ndarray
+        State vector in Hilbert or Liouville space.
+    U : np.ndarray
+        Basis transformation matrix in Hilbert space (must be 2d).
+
+    Returns
+    -------
+    rho_prime : np.ndarray
+        The state vector in the transformed basis.
+
+    References
+    ----------
+    .. [1] Havel, T. F. Robust procedures for converting among Lindblad, Kraus
+       and matrix representations of quantum dynamical semigroups. J Math. Phys.
+       44, 534-557 (2003).
+    """
+    rho = np.asarray(rho)
+    U = np.asarray(U)
+    U = _infer_basis_transform_matrix(rho, U)
+    return np.tensordot(rho, U.T.conj(), axes=(-1, -1))
 
 
 def all_states(N, subspace='gef'):
@@ -110,8 +156,10 @@ def operator_1_to_2(operator1):
     From the matrix representation of an operator in the 1-excitation subspace,
     determine its representation in the 2-excitation subspace
 
-    Assumes that given the matrix element A_{nm}, the full representation of
-    the operator is given by:
+    Assumes that given the matrix element :math:`A_{nm}`, the full
+    representation of the operator is given by:
+
+    .. math::
         \sum_{n,m} A_{nm} a^\dagger_n a_m
 
     Parameters
@@ -147,8 +195,10 @@ def operator_extend(operator1, subspace='gef'):
     Extend an operator defined in the 1-excitation subspace to include the
     ground and/or double-excitation subspaces
 
-    Assumes that given the matrix element A_{nm}, the full representation of
-    the operator is given by:
+    Assumes that given the matrix element :math:`A_{nm}`, the full
+    representation of the operator is given by:
+
+    .. math::
         \sum_{n,m} A_{nm} a^\dagger_n a_m
 
     Parameters

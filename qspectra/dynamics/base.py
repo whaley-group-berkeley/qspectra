@@ -15,6 +15,20 @@ class DynamicalModel(object):
     To implement a new type of dynamical model, inherit from this class and
     override all abstract methods
 
+    Parameters
+    ----------
+    hamiltonian : hamiltonian.Hamiltonian
+        Hamiltonian object specifying the system
+    rw_freq : float, optional
+        Rotating wave frequency at which to calculate dynamics. By default,
+        the rotating wave frequency is chosen from the central frequency
+        of the Hamiltonian.
+    hilbert_subspace : container, default 'ge'
+        Container of any or all of 'g', 'e' and 'f' indicating the maximum
+        set of Hilbert subspace on which to calculate the dynamics.
+    unit_convert : number, optional
+        Unit conversion from energy to time units (default 1).
+
     Warning
     -------
     In the current implementation of DynamicalModel, it is assumed that you can
@@ -27,21 +41,6 @@ class DynamicalModel(object):
 
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
                  unit_convert=1):
-        """
-        Parameters
-        ----------
-        hamiltonian : hamiltonian.Hamiltonian
-            Hamiltonian object specifying the system
-        rw_freq : float, optional
-            Rotating wave frequency at which to calculate dynamics. By default,
-            the rotating wave frequency is chosen from the central frequency
-            of the Hamiltonian.
-        hilbert_subspace : container, default 'ge'
-            Container of any or all of 'g', 'e' and 'f' indicating the maximum
-            set of Hilbert subspace on which to calculate the dynamics.
-        unit_convert : number, optional
-            Unit conversion from energy to time units (default 1).
-        """
         self.hamiltonian = hamiltonian.in_rotating_frame(rw_freq)
         self.rw_freq = self.hamiltonian.rw_freq
         self.hilbert_subspace = hilbert_subspace
@@ -123,9 +122,8 @@ class DynamicalModel(object):
         return self.hamiltonian.time_step / self.unit_convert
 
     def hilbert_subspace_index(self, subspace):
-        return hilbert_subspace_index(subspace, self.hilbert_subspace,
-                                        self.hamiltonian.n_sites,
-                                        self.hamiltonian.n_vibrational_states)
+        return self.hamiltonian.hilbert_subspace_index(
+            subspace, self.hilbert_subspace)
 
 
 class SystemOperator(object):

@@ -9,7 +9,8 @@ import scipy.linalg
 from .constants import GAUSSIAN_SD_FWHM
 from .operator_tools import (transition_operator, operator_extend, unit_vec,
                              tensor, extend_vib_operator, vib_create,
-                             vib_annihilate)
+                             vib_annihilate, hilbert_subspace_index,
+                             basis_transform_vector, basis_transform_operator)
 from .polarization import polarization_vector, random_rotation_matrix
 from .utils import imemoize, memoized_property, check_random_state, inspect_repr
 
@@ -66,7 +67,7 @@ def thermal_state(hamiltonian_matrix, temperature):
         hamiltonian_matrix = np.asarray(hamiltonian_matrix)
         rho = scipy.linalg.expm(-hamiltonian_matrix / float(temperature))
         trace = np.trace(rho)
-        if trace == 0:
+        if trace == 0 or np.isnan(rho).any():
             raise OverflowError(('temperature=%s too low to reliably calculate '
                                  'thermal_state; raise it or set it to zero '
                                  '(in which case ground_state is substituted')
@@ -76,6 +77,15 @@ def thermal_state(hamiltonian_matrix, temperature):
         rho = ground_state(hamiltonian_matrix)
     return rho.astype(complex)
 
+def add_braket(basis_labels):
+    braket_labels = []
+    for label in basis_labels:
+        if isinstance(label, basestring) or not np.iterable(label):
+            braket_label = '|{}>'.format(label)
+        else:
+            braket_label = ''.join('|{}>'.format(i) for i in label)
+        braket_labels.append(braket_label)
+    return braket_labels
 
 class HamiltonianError(Exception):
     """
@@ -92,23 +102,24 @@ class Hamiltonian(object):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, energy_spread_extra=None):
+    def __init__(self, energy_spread_extra=None, site_labels=None):
         self.energy_spread_extra = energy_spread_extra
         # keep track of the non-sampled and non-rotating version of this
         # Hamiltonian for the `in_rotating_frame` and `sample` methods:
-        self.not_sampled = self
-        self.not_rotating = self
+        self._not_sampled = self
+        self._not_rotating = self
         # keep track of the rotating wave frequency, so it's possible to check
         # what rotating wave frquency has been set:
         self.rw_freq = 0
+        self.site_labels = site_labels
 
     @property
-    def original(self):
+    def _original(self):
         """
         Reference to the non-sampled and non-rotating version of this
         Hamiltonian
         """
-        return self.not_rotating.not_sampled
+        return self._not_rotating._not_sampled
 
     def __repr__(self):
         return inspect_repr(self)
@@ -117,10 +128,10 @@ class Hamiltonian(object):
         return self._eq(other, max_depth=1)
 
     # set this to True if a subclass implements a meaningful `_eq` method
-    implements_eq = False
+    _implements_eq = False
 
     def _eq(self, other, max_depth):
-        if not self.implements_eq:
+        if not self._implements_eq:
             # fall back on comparison by memory address; otherwise, by default
             # _eq thinks all subclass Hamiltonians are equal
             return self is other
@@ -130,8 +141,8 @@ class Hamiltonian(object):
             # TODO: prove that max_depth=1 is sufficient in all cases
             return (not max_depth or
                     (self.rw_freq == other.rw_freq and
-                     self.not_sampled._eq(other.not_sampled, max_depth - 1) and
-                     self.not_rotating._eq(other.not_rotating, max_depth - 1)))
+                     self._not_sampled._eq(other._not_sampled, max_depth - 1) and
+                     self._not_rotating._eq(other._not_rotating, max_depth - 1)))
 
     def __ne__(self, other):
         return not self == other
@@ -147,7 +158,7 @@ class Hamiltonian(object):
         """
         Returns the ground state of this Hamiltonian as a density operator
         """
-        return ground_state(self.not_rotating.H(subspace))
+        return ground_state(self._not_rotating.H(subspace))
 
     @imemoize
     def thermal_state(self, subspace):
@@ -158,10 +169,10 @@ class Hamiltonian(object):
         temperature is assumed to be zero.
         """
         try:
-            temperature = self.not_rotating.bath.temperature
+            temperature = self._not_rotating.bath.temperature
         except AttributeError:
             temperature = 0
-        return thermal_state(self.not_rotating.H(subspace), temperature)
+        return thermal_state(self._not_rotating.H(subspace), temperature)
 
     @imemoize
     def in_rotating_frame(self, rw_freq=None):
@@ -189,11 +200,11 @@ class Hamiltonian(object):
             New instance of this Hamiltonian type shifted to the rotating frame.
         """
         if rw_freq is None:
-            rw_freq = self.original.transition_energy
-        ham = self.not_rotating._in_rotating_frame(rw_freq)
-        ham.not_rotating = self.not_rotating
-        if self.not_sampled is not self:
-            ham.not_sampled = self.not_sampled.in_rotating_frame(rw_freq)
+            rw_freq = self._original.transition_energy
+        ham = self._not_rotating._in_rotating_frame(rw_freq)
+        ham._not_rotating = self._not_rotating
+        if self._not_sampled is not self:
+            ham._not_sampled = self._not_sampled.in_rotating_frame(rw_freq)
         ham.rw_freq = rw_freq
         return ham
 
@@ -255,10 +266,10 @@ class Hamiltonian(object):
         """
         if n is None:
             n = np.random.randint(2 ** 30)
-        ham = self.not_sampled._sample(n, random_orientations)
-        if self.not_rotating is not self:
-            ham.not_rotating = self.not_rotating.sample(n, random_orientations)
-        ham.not_sampled = self.not_sampled
+        ham = self._not_sampled._sample(n, random_orientations)
+        if self._not_rotating is not self:
+            ham._not_rotating = self._not_rotating.sample(n, random_orientations)
+        ham._not_sampled = self._not_sampled
         ham.rw_freq = self.rw_freq
         return ham
 
@@ -301,8 +312,19 @@ class Hamiltonian(object):
         """
         Returns the eigensystem solution E, U for the system part of this
         Hamiltonian in the given subspace
+
+        The eigenvalues E arrive in ascending order by subspace and then by
+        value, i.e., 0-excitation states followed by 1-excitation states
+        followed by 2-excitation states.
         """
-        E, U = scipy.linalg.eigh(self.H(subspace))
+        # solve the eigenvalue problem in the non-rotating basis to preserve
+        # the ordering between blocks for each number of excitations (eigh
+        # guarantees eigenvalues are returned in ascending order)
+        E, U = scipy.linalg.eigh(self._not_rotating.H(subspace))
+        if 'e' in subspace:
+            E[self.hilbert_subspace_index('e', subspace)] -= self.rw_freq
+        if 'f' in subspace:
+            E[self.hilbert_subspace_index('f', subspace)] -= 2 * self.rw_freq
         return (E, U)
 
     def E(self, subspace):
@@ -318,6 +340,37 @@ class Hamiltonian(object):
         from the site to the energy eigen-basis
         """
         return self.eig(subspace)[1]
+
+    def transform_vector_to_eigenbasis(self, rho, subspace):
+        """
+        Transforms a state vector or vectorized operator from the site
+        basis to the eigenstate basis
+        """
+        U = self.U(subspace)
+        return basis_transform_vector(rho, U)
+
+    def transform_vector_from_eigenbasis(self, rho, subspace):
+        """
+        Transforms a state vector or vectorized operator from the eigenstate
+        basis to the site basis
+        """
+        U = self.U(subspace).T.conj()
+        return basis_transform_vector(rho, U)
+
+    def transform_operator_to_eigenbasis(self, rho, subspace):
+        """
+        Transforms an operator from the site basis to the eigenstate basis
+        """
+        U = self.U(subspace)
+        return basis_transform_operator(rho, U)
+
+    def transform_operator_from_eigenbasis(self, rho, subspace):
+        """
+        Transforms an operator from the eigenstate basis to the site basis
+        """
+        U = self.U(subspace).T.conj()
+        return basis_transform_operator(rho, U)
+
 
     @property
     def transition_energy(self):
@@ -337,9 +390,9 @@ class Hamiltonian(object):
         Note: If this frequency is very high, you probably need to transform to
         the rotating frame first.
         """
-        energies = self.not_sampled.E('gef')
+        energies = self._not_sampled.E('gef')
         if self.energy_spread_extra is None:
-            freq_extra = 0.01 * self.original.transition_energy
+            freq_extra = 0.01 * self._original.transition_energy
         else:
             freq_extra = self.energy_spread_extra
         freq_max = max(energies.max(), -energies.min()) + freq_extra
@@ -358,6 +411,49 @@ class Hamiltonian(object):
         """
         return 1.0 / self.freq_step
 
+    def basis_labels(self, subspace, braket=False):
+        return add_braket(self.site_labels) if braket else self.site_labels
+
+    def H_dataframe(self, subspace, braket=False):
+        """
+        Returns the Hamiltonian matrix wrapped in a Pandas DataFrame. Useful for
+        pretty printing if the basis labels are defined.
+        """
+        import pandas as pd
+        labels = self.basis_labels(subspace, braket)
+        matrix = self.H(subspace)
+        return pd.DataFrame(matrix, columns=labels, index=labels)
+
+    def U_dataframe(self, subspace, braket=False):
+        """
+        Returns the eigenvectors wrapped in a Pandas DataFrame. Useful for
+        pretty printing if the basis labels are defined.
+        """
+        import pandas as pd
+        labels = self.basis_labels(subspace, braket)
+        matrix = self.U(subspace)
+        energies = self.E(subspace)
+        return pd.DataFrame(matrix, columns=energies, index=labels)
+
+    def hilbert_subspace_index(self, subspace, all_subspaces):
+        """
+        Given a Hilbert subspace 'g', 'e' or 'f' and the set of all subspaces on
+        which a state is defined, returns a slice object to select all elements in
+        the given subspace
+
+        Examples
+        --------
+        >>> ham = ElectronicHamiltonian(np.eye(2))
+        >>> ham.hilbert_subspace_index('g', 'gef')
+        slice(0, 1)
+        >>> ham.hilbert_subspace_index('e', 'gef')
+        slice(1, 3)
+        >>> ham.hilbert_subspace_index('f', 'gef')
+        slice(3, 4)
+        """
+        return hilbert_subspace_index(subspace, all_subspaces, self.n_sites,
+                                      self.n_vibrational_states)
+
 
 def diagonal_gaussian_disorder(fwhm, n_sites):
     def disorder(random_state):
@@ -370,54 +466,52 @@ class ElectronicHamiltonian(Hamiltonian):
     Hamiltonian for an electronic system with coupling to an external field
     and an identical bath at each pigment
 
-    Properties
+    Parameters
     ----------
     H_1exc : np.ndarray
-        Matrix representation of this Hamiltonian in the 1-excitation subspace
+        Matrix representation of this Hamiltonian in the 1-excitation
+        subspace
     bath : bath.Bath, optional
-        Object containing the bath information (i.e., correlation function and
-        temperature). Each site is assumed to be linearly coupled to an
+        Object containing the bath information (i.e., correlation function
+        and temperature). Each site is assumed to be linearly coupled to an
         identical bath of this form.
     dipoles : np.ndarray, optional
         n x 3 array of dipole moments for each site.
     disorder : number or function, optional
         Full-width-at-half-maximum of diagonal, Gaussian static disorder
-        (independently sampled as each site) or a function which generates new
-        examples of static disorder. This argument controls how to generate
-        new samples with `sample_ensemble` method. By default (`disorder=None`),
-        no static disorder is added.
+        (independently sampled as each site) or a function which generates
+        new examples of static disorder. This argument controls how to
+        generate new samples with `sample_ensemble` method. By default
+        (`disorder=None`), no static disorder is added.
 
         If a function (or other callable), it should take a
-        `np.random.RandomState` object and return an array which can be added to
-        `H_1exc` to provide a new sample of static disorder. For example, to
-        produce Gaussian static disorder with standard deviation 100 for system
-        with two sites, you could write:
-            ```
+        `np.random.RandomState` object and return an array which can be
+        added to `H_1exc` to provide a new sample of static disorder. For
+        example, to produce Gaussian static disorder with standard deviation
+        100 for system with two sites, you could write::
+
             def disorder(random_state):
                 return np.diag(100 * random_state.randn(2))
-            ```
-        NOTE: Only use methods of the `random_state` object to generate random
-        numbers in your custom function. Otherwise, your random ensemble will
-        not be reproducible, which may add noise when you calculate ensemble
-        averages with the spectroscopy methods.
+
+        NOTE: Only use methods of the `random_state` object to generate
+        random numbers in your custom function. Otherwise, your random
+        ensemble will not be reproducible, which may add noise when you
+        calculate ensemble averages with the spectroscopy methods.
     random_seed : int, optional
         Random seed used to produce reproducible sampling with the
-        `sample_ensemble` method. Must be a non-negative integer or other valid
-        input for np.random.RandomState.
+        `sample_ensemble` method. Must be a non-negative integer or other
+        valid input for np.random.RandomState.
     energy_spread_extra : float, optional
         Default extra frequency to add to the spread of energies when
-        determining the frequency step size automatically. To avoid unnecessary
-        work when calculating quantities like correlation functions, this
-        constant should be set to roughly the width of inhomogeneous broadening
-        or the dephasing rate. Units should match `H_1exc`. By default, this is
-        set to one percent of the average excited state transition energy.
-
-    See also
-    --------
-    np.random.RandomState
+        determining the frequency step size automatically. To avoid
+        unnecessary work when calculating quantities like correlation
+        functions, this constant should be set to roughly the width of
+        inhomogeneous broadening or the dephasing rate. Units should match
+        `H_1exc`. By default, this is set to one percent of the average
+        excited state transition energy.
     """
     def __init__(self, H_1exc, bath=None, dipoles=None, disorder=None,
-                 random_seed=0, energy_spread_extra=None):
+                 random_seed=0, energy_spread_extra=None, site_labels=None):
         self.H_1exc = check_hermitian(H_1exc)
         self.bath = bath
         self.dipoles = np.asarray(dipoles) if dipoles is not None else None
@@ -425,9 +519,9 @@ class ElectronicHamiltonian(Hamiltonian):
         self.random_seed = random_seed
         # used by various dynamics methods to determine indices:
         self.n_vibrational_states = 1
-        super(ElectronicHamiltonian, self).__init__(energy_spread_extra)
+        super(ElectronicHamiltonian, self).__init__(energy_spread_extra, site_labels)
 
-    implements_eq = True
+    _implements_eq = True
 
     def _eq(self, other, max_depth):
         return (np.all(self.H_1exc == other.H_1exc) and
@@ -511,13 +605,34 @@ class ElectronicHamiltonian(Hamiltonian):
         return np.array([self.number_operator(n, subspace)
                          for n in xrange(self.n_sites)])
 
+    def basis_labels(self, subspace='gef', braket=False):
+        """
+        If custom labels are used but the ground state is included, then the
+        label "g" is used to represent the ground state. If site_labels is None,
+        then the Fock states are used (000, 100, 010, 001 ...)
+        """
+        labels = self._get_Fock_basis_labels(subspace, self.site_labels)
+        return add_braket(labels) if braket else labels
+
+    def _get_Fock_basis_labels(self, subspace, labels=None):
+        labels_1exc = [10 ** (self.n_sites - i - 1) for i in range(self.n_sites)]
+        labels_full = np.diag(operator_extend(np.diag(labels_1exc), subspace))
+        label_indices = [str(i).zfill(self.n_sites) for i in labels_full]
+
+        if labels is None:
+            return label_indices
+        else:
+            custom_labels = [','.join([label for i, label in enumerate(labels)
+                             if state[i] == '1']) for state in label_indices]
+            custom_labels[0] = 'g'
+            return custom_labels
 
 class VibronicHamiltonian(Hamiltonian):
     """
     Hamiltonian which extends an electronic Hamiltonian to include explicit
     vibrations
 
-    Properties
+    Parameters
     ----------
     electronic : ElectronicHamiltonian
         Object which represents the electronic part of the Hamiltonian,
@@ -531,23 +646,31 @@ class VibronicHamiltonian(Hamiltonian):
         2D array giving the electronic-vibrational couplings [c_{nm}], where
         the coupling operators are in the form:
         c_{nm}*|n><n|*(b(m) + b(m)^\dagger),
-        where |n> is the singly excited electronic state of site n in the full
-        singly excited subspace, and b(m) and b(m)^\dagger are the
+        where |n> is the singly excited electronic state of site n in the
+        full singly excited subspace, and b(m) and b(m)^\dagger are the
         vibrational annihilation and creation operators for vibration m.
     sys_bath_coupling_type : container, default 'el'
-        Container of either 'el' or 'vib' indicating the form of the
-        system-bath coupling operators to use.
+        Container of either 'el', 'vib', or 'elvib' indicating the form of the
+        system-bath coupling operators to use. By default, this is set to 'el'.
+    xi_el : float, optional
+        Constant to weight the strength of the el-bath coupling operator. By
+        default, this is set to 1.
+    xi_vib : float, optional
+        Constant to weight the strength of the vib-bath coupling operator. By
+        default, this is set to 1.
     energy_spread_extra : float, optional
         Default extra frequency to add to the spread of energies when
-        determining the frequency step size automatically. To avoid unnecessary
-        work when calculating quantities like correlation functions, this
-        constant should be set to roughly the width of inhomogeneous broadening
-        or the dephasing rate. Units should match `H_1exc`. By default, this is
-        set to one percent of the average excited state transition energy.
+        determining the frequency step size automatically. To avoid
+        unnecessary work when calculating quantities like correlation
+        functions, this constant should be set to roughly the width of
+        inhomogeneous broadening or the dephasing rate. Units should match
+        `H_1exc`. By default, this is set to one percent of the average
+        excited state transition energy.
     """
     def __init__(self, electronic, n_vibrational_levels, vib_energies,
-                 elec_vib_couplings, sys_bath_coupling_type='el',
-                 energy_spread_extra=None):
+        	 elec_vib_couplings, sys_bath_coupling_type='el',
+         	 xi_el=1., xi_vib=1.,
+		 energy_spread_extra=None, site_labels=None):
         self.electronic = electronic
         self.energy_spread_extra = self.electronic.energy_spread_extra
         self.bath = self.electronic.bath
@@ -556,9 +679,11 @@ class VibronicHamiltonian(Hamiltonian):
         self.vib_energies = np.asarray(vib_energies)
         self.elec_vib_couplings = np.asarray(elec_vib_couplings)
         self.sys_bath_coupling_type = sys_bath_coupling_type
-        super(VibronicHamiltonian, self).__init__(energy_spread_extra)
+        self.xi_el = xi_el
+        self.xi_vib = xi_vib
+        super(VibronicHamiltonian, self).__init__(energy_spread_extra, site_labels)
 
-    implements_eq = True
+    _implements_eq = True
 
     def _eq(self, other, max_depth):
         return (self.electronic == other.electronic and
@@ -567,6 +692,8 @@ class VibronicHamiltonian(Hamiltonian):
                 np.all(self.vib_energies == other.vib_energies) and
                 np.all(self.elec_vib_couplings == other.elec_vib_couplings) and
                 self.sys_bath_coupling_type == other.sys_bath_coupling_type and
+                self.xi_el == other.xi_el and
+                self.xi_vib == other.xi_vib and
                 super(VibronicHamiltonian, self)._eq(other, max_depth))
 
     @memoized_property
@@ -629,13 +756,13 @@ class VibronicHamiltonian(Hamiltonian):
         return type(self)(self.electronic.in_rotating_frame(rw_freq),
                           self.n_vibrational_levels, self.vib_energies,
                           self.elec_vib_couplings, self.sys_bath_coupling_type,
-                          self.energy_spread_extra)
+                          self.xi_el, self.xi_vib, self.energy_spread_extra)
 
     def _sample(self, n, random_orientations):
         return type(self)(self.electronic.sample(n, random_orientations),
                           self.n_vibrational_levels, self.vib_energies,
                           self.elec_vib_couplings, self.sys_bath_coupling_type,
-                          self.energy_spread_extra)
+                          self.xi_el, self.xi_vib, self.energy_spread_extra)
 
     def el_to_sys_operator(self, el_operator):
         """
@@ -659,6 +786,59 @@ class VibronicHamiltonian(Hamiltonian):
         """
         return self.el_to_sys_operator(
             self.electronic.dipole_operator(*args, **kwargs))
+    
+    def electronic_bath_couplings(self, subspace='gef'):
+        """
+        Return a list of matrix representations in the given subspace of the
+        electronic-bath coupling operators
+        
+        The el-bath coupling operators for each site are taken to be the
+        electronic projector |n><n| as specified in
+        ElectronicHamiltonian.system_bath_couplings
+        """
+        return self.el_to_sys_operator(
+            self.electronic.system_bath_couplings(subspace))
+        
+    def vibrational_bath_couplings(self, subspace='gef'):
+        """
+        Return a list of matrix representations in the given subspace of the
+        vibrational-bath coupling operators
+        
+        Note: this coupling assumes that each electronic site is coupled
+        to only one vibrational mode
+            
+        The sys-bath coupling operators for each site are of the form
+        L = |g><g|(b + b^\dagger)
+            + |e><e|(b - \sqrt{X} + b^\dagger - \sqrt{X})
+          = (b + b^\dagger) - 2*\sqrt{X}|e><e|
+        where |g> and |e> are the ground and singly excited electronic
+        states for the site, b and b^\dagger are the annihilation and
+        creation operators for the vibrational mode of the site, and X is
+        the Huang-Rhys factor describing the shift in the ground and singly
+        excited potential energy surfaces, which is related to the elec-vib
+        coupling
+        """
+        dim = (self.electronic.n_states(subspace)
+               * self.n_vibrational_states)
+        vib_bath_couplings = np.array([]).reshape((0,dim,dim))
+        
+        shifts = np.true_divide(np.diag(self.elec_vib_couplings),
+                                self.vib_energies)
+        
+        for m, num_levels in enumerate(self.n_vibrational_levels):
+            vib_op = extend_vib_operator(self.n_vibrational_levels, m,
+                                         vib_annihilate(num_levels)
+                                         + vib_create(num_levels))
+            op_1 = self.vib_to_sys_operator(vib_op, subspace)
+            
+            op_2 = (2.*shifts[m]
+                    * self.el_to_sys_operator(
+                          self.electronic.number_operator(m, subspace)))
+            
+            vib_bath_couplings = np.concatenate((vib_bath_couplings,
+                                                 np.array([op_1 + op_2])))
+        
+        return vib_bath_couplings
 
     def system_bath_couplings(self, subspace='gef'):
         """
@@ -667,10 +847,10 @@ class VibronicHamiltonian(Hamiltonian):
         
         The system-bath coupling operators can be selected to be of type:
         'el' : purely electronic
-            The sys-bath coupling operators are taken to be the electronic
-            projector |n><n| as specified in
+            The sys-bath coupling operators for each site are taken to be the
+            electronic projector |n><n| as specified in
             ElectronicHamiltonian.system_bath_couplings
-        'vib' : vibronic
+        'vib' : vibrational
             Note: this coupling assumes that each electronic site is coupled
             to only one vibrational mode
             
@@ -678,39 +858,53 @@ class VibronicHamiltonian(Hamiltonian):
             H_{sb} = |g><g|(b + b^\dagger)
                      + |e><e|(b - \sqrt{X} + b^\dagger - \sqrt{X})
                    = (b + b^\dagger) - 2*\sqrt{X}|e><e|
+            L = |g><g|(b + b^\dagger)
+                + |e><e|(b - \sqrt{X} + b^\dagger - \sqrt{X})
+              = (b + b^\dagger) - 2*\sqrt{X}|e><e|
             where |g> and |e> are the ground and singly excited electronic
             states for the site, b and b^\dagger are the annihilation and
             creation operators for the vibrational mode of the site, and X is
             the Huang-Rhys factor describing the shift in the ground and singly
             excited potential energy surfaces, which is related to the elec-vib
             coupling
+        'elvib' : electronic and vibrational
+            The sys-bath coupling operators for each site are taken to be the
+            sum of the 'el' and 'vib' cases
         """
         if self.bath is None:
             raise HamiltonianError('bath undefined')
         elif self.sys_bath_coupling_type == 'el':
-            return self.el_to_sys_operator(
-                self.electronic.system_bath_couplings(subspace))
+            return self.xi_el*self.electronic_bath_couplings(subspace)
         elif self.sys_bath_coupling_type == 'vib':
-            dim = (self.electronic.n_states(subspace)
-                   * self.n_vibrational_states)
-            sys_bath_couplings = np.array([]).reshape((0,dim,dim))
-            
-            shifts = np.true_divide(np.diag(self.elec_vib_couplings),
-                                    self.vib_energies)
-            
-            for m, num_levels in enumerate(self.n_vibrational_levels):
-                vib_op = extend_vib_operator(self.n_vibrational_levels, m,
-                                             vib_annihilate(num_levels)
-                                             + vib_create(num_levels))
-                op_1 = self.vib_to_sys_operator(vib_op, subspace)
-                
-                op_2 = (2.*shifts[m]
-                        * self.el_to_sys_operator(
-                              self.electronic.number_operator(m, subspace)))
-                
-                sys_bath_couplings = np.concatenate((sys_bath_couplings,
-                                                     np.array([op_1 + op_2])))
-            
-            return sys_bath_couplings
+            return self.xi_vib*self.vibrational_bath_couplings(subspace)
+        elif self.sys_bath_coupling_type == 'elvib':
+            return (self.xi_el*self.electronic_bath_couplings(subspace)
+                    + self.xi_vib*self.vibrational_bath_couplings(subspace))
         else:
             raise HamiltonianError('system-bath coupling type unrecognized')
+
+    def vib_basis_labels(self):
+        vib_label_operator = np.diag(np.zeros(self.n_vibrational_states))
+        num_sites = len(self.n_vibrational_levels)
+        for m, num_levels in enumerate(self.n_vibrational_levels):
+            index = 10 ** (num_sites - m - 1)
+            vib_operator = np.diag(np.arange(num_levels))
+            temp =  extend_vib_operator(self.n_vibrational_levels, m, vib_operator)
+            vib_label_operator += index * temp
+        vib_labels = np.diag(vib_label_operator)
+        return [('{:0' + str(num_sites) + '}').format(int(i)) for i in vib_labels]
+
+    def basis_labels(self, subspace='gef', braket=False):
+        """
+        If double excitations are requested, then default to using the Fock basis
+        If custom labels are used but the ground state is included, then the
+        label "gs" is prepended.
+
+        Vibronic basis labels are returned as a list of tuples:
+        [(elec_basis_label, vib_basis_label), ]
+        """
+        elec_labels = self.electronic.basis_labels(subspace)
+        vib_labels = self.vib_basis_labels()
+        labels = [(e, v) for e in elec_labels for v in vib_labels]
+        return add_braket(labels) if braket else labels
+

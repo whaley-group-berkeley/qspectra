@@ -1,6 +1,6 @@
 """Defines Bath classes to use in Hamiltonians"""
 import numpy as np
-from numpy import pi, tan, exp
+from numpy import pi, tan
 
 from .utils import inspect_repr
 
@@ -14,28 +14,21 @@ class Bath(object):
     spectral_density : SpectralDensity
         Spectral density of the bath.
     """
-    # # there seems to be some sort of bug in this method...
-    # def corr_func_real(self, x):
-    #     """
-    #     Correlation function
-    #     """
+    def corr_func_real(self, x):
+        T = self.temperature
+        J = self.spectral_density_func
+        J0 = self.spectral_density_limit_at_zero
 
-    #     T = self.temperature
-    #     J = self.spectral_density_func
-    #     J0 = self.spectral_density_limit_at_zero
+        def n(x):
+            return 1 / np.expm1(x / T)
 
-    #  should use np.exp1m instead?
-    #     def n(x):
-    #         return 1 / np.exp1m(-x / T)
-    #         return 1 / (exp(x / T) - 1)
+        def J_anti(x):
+            return J(x) if x >= 0 else -J(-x)
 
-    #     def J_anti(x):
-    #         return J(x) if x >= 0 else -J(-x)
-
-    #     if x == 0:
-    #         return T * J0
-    #     else:
-    #         return (n(x) + 1) * J_anti(x)
+        if x == 0:
+            return T * J0
+        else:
+            return (n(x) + 1) * J_anti(x)
 
     def __repr__(self):
         return inspect_repr(self)
@@ -76,9 +69,9 @@ class UncoupledBath(Bath):
 
 class DebyeBath(Bath):
     def __init__(self, temperature, reorg_energy, cutoff_freq):
-        self.temperature = temperature
-        self.reorg_energy = reorg_energy
-        self.cutoff_freq = cutoff_freq
+        self.temperature = float(temperature)
+        self.reorg_energy = float(reorg_energy)
+        self.cutoff_freq = float(cutoff_freq)
 
     def spectral_density_func(self, x):
         return (2 * self.reorg_energy * self.cutoff_freq * x
@@ -88,17 +81,13 @@ class DebyeBath(Bath):
     def spectral_density_limit_at_zero(self):
         return 2 * self.reorg_energy / self.cutoff_freq
 
-    def corr_func_real(self, x):
-        # temporary method until Bath.corr_func_real gets fixed
-        return self.corr_func_complex(x).real
-
     def corr_func_complex(self, x, matsubara_cutoff=1000):
         """
         Full one-sided correlation function for Debye spectral density
 
         References
         ----------
-        J. Chem. Phys. 112, 7953
+        .. [1] J. Chem. Phys. 112, 7953
         """
         T = self.temperature
         lmbda = self.reorg_energy
@@ -116,34 +105,42 @@ class DebyeBath(Bath):
 class PseudomodeBath(Bath):
     """
     A bath specified by so-called pseudomodes.
-    Each pseudomode (PM) is represented by a Lorentzian in the
-    bath correlation SPECTRUM (the Fourier transform of the bath correlation function).
-    (Note that the bath correlation spectrum is temperature-dependent and is different from the temperature-INdependent bath spectral density.
-    Given the temperature the spectral density can be calculated from the bath correlation spectrum and vice versa.
-    See Ref. [J. Chem. Phys. 137, 204110 (2012)])
-    Given a spectral density and a temperature, the bath correlation spectrum can be calculated from that and fitted with the Lorentzians representing the pseudomodes.
+
+    Each pseudomode (PM) is represented by a Lorentzian in the bath correlation
+    SPECTRUM (the Fourier transform of the bath correlation function). (Note
+    that the bath correlation spectrum is temperature-dependent and is different
+    from the temperature-INdependent bath spectral density. Given the
+    temperature the spectral density can be calculated from the bath correlation
+    spectrum and vice versa. See Ref. [1]_) Given a spectral density and a
+    temperature, the bath correlation spectrum can be calculated from that and
+    fitted with the Lorentzians representing the pseudomodes.
 
     Parameters
     ----------
-    numb_pm: Number of the PMs (number of Lorentzians)
-    Omega: Frequecies of the PMs (where Lorentzians are centered)
-    gamma: Dampings of the PMs (widths of the Lorentzians)
-    huang: Couplings to the PMs (prefactors of the Lorentzians)
+    numb_pm : np.ndarray
+        Number of the PMs (number of Lorentzians)
+    Omega : np.ndarray
+        Frequecies of the PMs (where Lorentzians are centered)
+    gamma : np.ndarray
+        Dampings of the PMs (widths of the Lorentzians)
+    huang : np.ndarray
+        Couplings to the PMs (prefactors of the Lorentzians)
 
-    If the sites have separate baths, the parameters
-    Omega, gamma, and huang
-    of the PMs should be given as arrays of the form
-    np.ones((numb_pm, numb_sites), complex)
+    Notes
+    -----
+
+    If the sites have separate baths, the parameters `Omega`, `gamma`, and
+    `huang` of the PMs should be given as arrays with shape `(numb_pm,
+    numb_sites)`
 
     References
     ----------
-    J. Chem. Phys. 137, 204110 (2012)
-
+    .. [1] J. Chem. Phys. 137, 204110 (2012)
     """
     def __init__(self, numb_pm, Omega, gamma, huang):
         self.numb_pm = numb_pm
         self.Omega = Omega
         self.gamma = gamma
         self.huang = huang
-        
-        
+
+

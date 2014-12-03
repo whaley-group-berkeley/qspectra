@@ -6,19 +6,19 @@ from .liouville_space import matrix_to_ket_vec
 
 
 class ZOFESpaceOperator(SystemOperator):
+    """
+    Parameters
+    ----------
+    operator : np.ndarray
+        Matrix representation of the operator in the Hilbert subspace of
+        `dynamical_model`.
+    liouv_subspace_map : string
+        String in the form 'eg->ee' indicating the mapping between
+        Liouville subspaces on which the operator should act.
+    dynamical_model : ZOFEModel
+        ZOFE dynamical model on which this operator acts.
+    """
     def __init__(self, operator, liouv_subspace_map, dynamical_model):
-        """
-        Parameters
-        ----------
-        operator : np.ndarray
-            Matrix representation of the operator in the Hilbert subspace of
-            `dynamical_model`.
-        liouv_subspace_map : string
-            String in the form 'eg->ee' indicating the mapping between
-            Liouville subspaces on which the operator should act.
-        dynamical_model : ZOFEModel
-            ZOFE dynamical model on which this operator acts.
-        """
         self.operator = operator
         self.dynamical_model = dynamical_model
 
@@ -42,33 +42,34 @@ class ZOFESpaceOperator(SystemOperator):
 
 
 class ZOFEModel(DynamicalModel):
+    """
+    DynamicalModel for ZOFE master equation
+
+    Assumes that each pigment is coupled to an identical, independent bath
+
+    Parameters
+    ----------
+    hamiltonian : hamiltonian.Hamiltonian
+        Hamiltonian object specifying the system
+    rw_freq : float, optional
+        Rotating wave frequency at which to calculate dynamics. By default,
+        the rotating wave frequency is chosen from the central frequency
+        of the Hamiltonian.
+    hilbert_subspace : container, default 'ge'
+        Container of any or all of 'g', 'e' and 'f' indicating the desired
+        Hilbert subspace
+    unit_convert : number, optional
+        Unit conversion from energy to time units (default 1).
+
+    References
+    ----------
+    See references in method containing the ZOFE master equation
+    """
+
     system_operator = ZOFESpaceOperator
 
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
                  unit_convert=1, ham_hermit=False, rho_hermit=False):
-        """
-        DynamicalModel for ZOFE master equation
-
-        Assumes that each pigment is coupled to an identical, independent bath
-
-        Parameters
-        ----------
-        hamiltonian : hamiltonian.Hamiltonian
-            Hamiltonian object specifying the system
-        rw_freq : float, optional
-            Rotating wave frequency at which to calculate dynamics. By default,
-            the rotating wave frequency is chosen from the central frequency
-            of the Hamiltonian.
-        hilbert_subspace : container, default 'ge'
-            Container of any or all of 'g', 'e' and 'f' indicating the desired
-            Hilbert subspace
-        unit_convert : number, optional
-            Unit conversion from energy to time units (default 1).
-
-        References
-        ----------
-        See references in method containing the ZOFE master equation
-        """
         super(ZOFEModel, self).__init__(
              hamiltonian, rw_freq, hilbert_subspace, unit_convert)
 
@@ -119,8 +120,8 @@ class ZOFEModel(DynamicalModel):
         Does work for one-exciton AND two-exciton space
         (including ground state).
 
-        Arguments
-        ---------
+        Parameters
+        ----------
         t: time
         rho_oop_vec: vector containing the density matrix and the
             auxiliary operator at time t
@@ -150,12 +151,12 @@ class ZOFEModel(DynamicalModel):
 
         References
         ----------
-        ZOFE master equation: Ritschel et. al., An efficient method to calculate
-            excitation energy transfer in light-harvesting systems:
-            application to the Fenna-Matthews-Olson complex, NJP 13 (2011) 113034
-            (and references therein)
-        Extend ZOFE master equation to two-exciton space: unpublished
-        Speed up ZOFE master equation: unpublished
+        .. [1] ZOFE master equation: Ritschel et. al., An efficient method to
+           calculate excitation energy transfer in light-harvesting systems:
+           application to the Fenna-Matthews-Olson complex, NJP 13 (2011) 113034
+           (and references therein)
+        .. [2] Extend ZOFE master equation to two-exciton space: unpublished
+        .. [3] Speed up ZOFE master equation: unpublished
         """
         rho, oop = self.state_vec_to_operators(rho_oop_vec)
 
