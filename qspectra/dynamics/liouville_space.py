@@ -204,18 +204,27 @@ class LiouvilleSpaceModel(DynamicalModel):
     evolve_basis : string, optional
         Either 'site' or 'eigen'. Specifies whether to calculate
         dynamics in the site basis or the system eigenstate basis.
-    sparse_matrix : string or bool, optional
+    sparse_matrix : bool or func, optional
         Specifies whether csr_matrix should be used to speed up the
         dynamics calculation for sufficinently sparse matrices. Use
         this in conjunction with evolve_basis='eigen'. (The site basis
-        tends to be a dense matrix). If set to 'optimal', the sparsity
-        of the equation of motion matrix will be checked to determine
-        the use of csr_matrix
+        tends to be a dense matrix).
+        If a function is passed, it should act on a matrix and determine
+        whether it is sparse enough to use csr_matrix.
+
+        def func(matrix):
+            if matrix is sparse:
+                return True
+            else:
+                return False
+
+        If sparse_matrix is True, it will by default only use csr_matrix
+        if the matrix is at least 0.99 sparse.
     """
     system_operator = LiouvilleSpaceOperator
 
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
-                 unit_convert=1, evolve_basis='site', sparse_matrix='optimal'):
+                 unit_convert=1, evolve_basis='site', sparse_matrix=False):
         super(LiouvilleSpaceModel, self).__init__(hamiltonian, rw_freq,
                                                   hilbert_subspace,
                                                   unit_convert)
@@ -283,14 +292,13 @@ class LiouvilleSpaceModel(DynamicalModel):
             # and:
             #     L.T.dot(rho)
             evolve_matrix = evolve_matrix.T
-        if self.sparse_matrix == True:
-            evolve_matrix = csr_matrix(evolve_matrix)
-        elif self.sparse_matrix == 'optimal':
-            tot = evolve_matrix.size
-            frac_zero = np.mean(evolve_matrix == 0)
-            if tot > 5000 and frac_zero > 0.99:
-                # overhead for sparse matrices can be large.
-                # make sure evolve_matrix is sufficinently sparse.
+        if self.sparse_matrix is not False:
+            if self.sparse_matrix is True:
+                def sparse_check(mat):
+                    return np.mean(mat == 0) >= 0.99
+            else:
+                sparse_check = self.sparse_matrix
+            if sparse_check(evolve_matrix):
                 evolve_matrix = csr_matrix(evolve_matrix)
         def eom(t, rho):
             return evolve_matrix.dot(rho)

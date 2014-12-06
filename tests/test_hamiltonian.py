@@ -183,6 +183,8 @@ class TestElectronicHamiltonian(unittest.TestCase, SharedTests):
 
         self.assertEqual(H_sys_labeled.basis_labels('gef', braket=True),
             ['|g>', '|one>', '|two>', '|one,two>'])
+        self.assertEqual(H_sys_labeled.basis_labels('ef', braket=True),
+            ['|one>', '|two>', '|one,two>'])
         self.assertEqual(H_sys_labeled.basis_labels('gef'),
             ['g', 'one', 'two', 'one,two'])
 

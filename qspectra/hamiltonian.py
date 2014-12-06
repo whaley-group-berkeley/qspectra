@@ -624,7 +624,8 @@ class ElectronicHamiltonian(Hamiltonian):
         else:
             custom_labels = [','.join([label for i, label in enumerate(labels)
                              if state[i] == '1']) for state in label_indices]
-            custom_labels[0] = 'g'
+            if 'g' in subspace:
+                custom_labels[0] = 'g'
             return custom_labels
 
 class VibronicHamiltonian(Hamiltonian):
