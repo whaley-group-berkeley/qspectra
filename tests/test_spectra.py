@@ -42,7 +42,10 @@ class TestRedfieldDimer(unittest.TestCase):
 
     def test_evolve_basis_sparse_matrix(self):
         linear_responses = []
-        for basis, sp in itertools.product(['site', 'eigen'], [False, True]):
+        def sparse_func(mat):
+            return True
+        for basis, sp in itertools.product(['site', 'eigen'],
+                                           [False, True, sparse_func]):
             model = self.get_model(basis, sp)
             f, X = absorption_spectra(model, 10000)
             linear_responses.append(X)
