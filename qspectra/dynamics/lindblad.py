@@ -3,6 +3,7 @@ import scipy
 
 from ..operator_tools import basis_transform_operator
 from .liouville_space import (super_commutator_matrix, tensor_to_super,
+                              super_left_matrix, super_right_matrix,
                               LiouvilleSpaceModel)
 from ..utils import memoized_property
 from qspectra import *
@@ -60,13 +61,10 @@ def lindblad_superoperator(*args, **kwargs):
 
 def add_imaginary_term(hamiltonian, site, subspace, magnitude=0.00):
     """ adds a small imaginary term to hamiltonian[site, site]
-    returns the hamiltonian in the eignestate basis """
-    non_hermitian_H = 1j * np.copy(hamiltonian.H(subspace))
-    non_hermitian_H *= 1j
-    non_hermitian_H[site, site] = 1j * non_hermitian_H[site, site] * magnitude
-
-    E, U = scipy.linalg.eig(non_hermitian_H)
-    print E
+    returns the hamiltonian in the eigenstate basis """
+    non_hermitian_H = np.copy(hamiltonian.H(subspace)) + 0j
+    non_hermitian_H[site, site] += -1j * 1050
+    E = np.sort(np.linalg.eig(non_hermitian_H)[0])
     return np.diag(E)
 
 def lindblad_evolve(hamiltonian, subspace='e', add_imag_term=None,
@@ -74,8 +72,10 @@ def lindblad_evolve(hamiltonian, subspace='e', add_imag_term=None,
     H = np.diag(hamiltonian.E(subspace))
     R = lindblad_superoperator(hamiltonian, subspace=subspace, **kwargs)
     if add_imag_term is not None:
-        H = add_imaginary_term(hamiltonian, self.add_imag_term, subspace)
-    L = -1j * super_commutator_matrix(H) + R
+        H = add_imaginary_term(hamiltonian, add_imag_term, subspace)
+        L = -1j * (super_left_matrix(H) - super_right_matrix(H).T.conj()) + R
+    else:
+        L = -1j * super_commutator_matrix(H) + R
 
     if evolve_basis == 'site':
         return basis_transform_operator(L, hamiltonian.U(subspace).T.conj())

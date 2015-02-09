@@ -2,6 +2,7 @@ import numpy as np
 
 from ..operator_tools import basis_transform_operator
 from .liouville_space import (super_commutator_matrix, tensor_to_super,
+                              super_left_matrix, super_right_matrix,
                               LiouvilleSpaceModel)
 from ..utils import memoized_property
 
@@ -83,11 +84,25 @@ def redfield_dissipator(*args, **kwargs):
     """
     return tensor_to_super(redfield_tensor(*args, **kwargs))
 
+def add_imaginary_term(hamiltonian, site, subspace, magnitude=0.00):
+    """ adds a small imaginary term to hamiltonian[site, site]
+    returns the hamiltonian in the eigenstate basis """
+    non_hermitian_H = np.copy(hamiltonian.H(subspace)) + 0j
+    non_hermitian_H[site, site] += -1j * 1050
+    E = np.sort(np.linalg.eig(non_hermitian_H)[0])
+    # origH = np.diag(hamiltonian.E(subspace))
+    # print E - origH
+    return np.diag(E)
 
-def redfield_evolve(hamiltonian, subspace='ge', evolve_basis='site', **kwargs):
+def redfield_evolve(hamiltonian, subspace='ge', add_imag_term=None,
+                    evolve_basis='site', **kwargs):
     H = np.diag(hamiltonian.E(subspace))
     R = redfield_dissipator(hamiltonian, subspace, **kwargs)
-    L = -1j * super_commutator_matrix(H) - R
+    if add_imag_term is not None:
+        H = add_imaginary_term(hamiltonian, add_imag_term, subspace)
+        L = -1j * (super_left_matrix(H) - super_right_matrix(H).T.conj()) - R
+    else:
+        L = -1j * super_commutator_matrix(H) - R
     if evolve_basis == 'site':
         return basis_transform_operator(L, hamiltonian.U(subspace).T.conj())
     elif evolve_basis == 'eigen':
@@ -121,6 +136,7 @@ class RedfieldModel(LiouvilleSpaceModel):
     discard_imag_corr : boolean, default False
         Whether to discard the imaginary part of the bath correlation
         functions
+    add_imag_term: adds a small imaginary term to the requested site.
 
     References
     ----------
@@ -128,17 +144,19 @@ class RedfieldModel(LiouvilleSpaceModel):
     """
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
                  unit_convert=1, secular=True, discard_imag_corr=False,
-                 evolve_basis='site', sparse_matrix=False):
+                 evolve_basis='site', sparse_matrix=False, add_imag_term=None):
         super(RedfieldModel, self).__init__(hamiltonian, rw_freq,
                                             hilbert_subspace, unit_convert,
                                             evolve_basis, sparse_matrix)
         self.secular = secular
         self.discard_imag_corr = discard_imag_corr
+        self.add_imag_term = add_imag_term
 
     @memoized_property
     def evolution_super_operator(self):
         return (self.unit_convert
                 * redfield_evolve(self.hamiltonian, self.hilbert_subspace,
                                   evolve_basis=self.evolve_basis,
+                                  add_imag_term=self.add_imag_term,
                                   secular=self.secular,
                                   discard_imag_corr=self.discard_imag_corr))
