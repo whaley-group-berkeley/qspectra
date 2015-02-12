@@ -141,6 +141,7 @@ class Hamiltonian(object):
             # TODO: prove that max_depth=1 is sufficient in all cases
             return (not max_depth or
                     (self.rw_freq == other.rw_freq and
+                     self.site_labels == other.site_labels and
                      self._not_sampled._eq(other._not_sampled, max_depth - 1) and
                      self._not_rotating._eq(other._not_rotating, max_depth - 1)))
 
