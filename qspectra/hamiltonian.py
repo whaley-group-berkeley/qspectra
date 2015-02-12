@@ -546,7 +546,8 @@ class ElectronicHamiltonian(Hamiltonian):
     def _in_rotating_frame(self, rw_freq):
         H_1exc = self.H_1exc - rw_freq * np.identity(self.n_sites)
         return type(self)(H_1exc, self.bath, self.dipoles, self.disorder,
-                          self.random_seed, self.energy_spread_extra)
+                          self.random_seed, self.energy_spread_extra,
+                          self.site_labels)
 
     def _sample(self, n, random_orientations):
         if self.disorder is None:
@@ -573,7 +574,8 @@ class ElectronicHamiltonian(Hamiltonian):
         else:
             dipoles = self.dipoles
         return type(self)(H_1exc, self.bath, dipoles, self.disorder,
-                          random_seed, self.energy_spread_extra)
+                          random_seed, self.energy_spread_extra,
+                          self.site_labels)
 
     def dipole_operator(self, subspace='gef', polarization='x',
                         transitions='-+'):
@@ -739,12 +741,14 @@ class VibronicHamiltonian(Hamiltonian):
     def _in_rotating_frame(self, rw_freq):
         return type(self)(self.electronic.in_rotating_frame(rw_freq),
                           self.n_vibrational_levels, self.vib_energies,
-                          self.elec_vib_couplings, self.energy_spread_extra)
+                          self.elec_vib_couplings, self.energy_spread_extra,
+                          self.site_labels)
 
     def _sample(self, n, random_orientations):
         return type(self)(self.electronic.sample(n, random_orientations),
                           self.n_vibrational_levels, self.vib_energies,
-                          self.elec_vib_couplings, self.energy_spread_extra)
+                          self.elec_vib_couplings, self.energy_spread_extra,
+                          self.site_labels)
 
     def el_to_sys_operator(self, el_operator):
         """
