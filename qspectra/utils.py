@@ -115,8 +115,8 @@ def memoized_property(x):
 def inspect_repr(obj):
     """
     Returns a sensible `repr` for an object by inspecting the arguments to its
-    `__init__` method. Assumes that each argument is saved as an instance
-    variable.
+    `__init__` method. Assumes that each argument is available as a property of
+    the same name.
     """
     def wrap_indent(text, start='', length=None):
         if length is None:
@@ -126,7 +126,7 @@ def inspect_repr(obj):
     # use the arguments to __init__ other than 'self'
     args = inspect.getargspec(type(obj).__init__).args[1:]
     # extract repr of each argument, removing direct loops
-    kwargs = ((k, repr(vars(obj)[k]) if vars(obj)[k] is not obj
+    kwargs = ((k, repr(getattr(obj, k)) if getattr(obj, k) is not obj
                   else '%s(...)' % type(obj).__name__)
               for k in args)
     return wrap_indent(',\n'.join(wrap_indent(v, k + '=') for k, v in kwargs),
