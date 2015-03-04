@@ -1,7 +1,7 @@
 import numpy as np
 # import scipy as sp
 from scipy import constants
-from scipy.sparse import lil_matrix
+from scipy.sparse import lil_matrix, csr_matrix
 
 # from ..bath import PseudomodeBath
 # from .base import DynamicalModel, SystemOperator
@@ -134,7 +134,7 @@ def HEOM_tensor(hamiltonian, subspace='ge', K=3, level_cutoff=3):
                     commutator = c[k] * proj_op_left[j] \
                         - np.conjugate(c[k]) * proj_op_right[j]
                     L[left_slice, minus_slice] = -1j * n_jk * commutator
-    return L
+    return csr_matrix(L)
 
 
 def ADO_mappings(N, K, level_cutoff):
