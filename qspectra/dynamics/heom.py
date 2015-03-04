@@ -1,7 +1,7 @@
 import numpy as np
 # import scipy as sp
 from scipy import constants
-from scipy.sparse import dok_matrix
+from scipy.sparse import lil_matrix
 
 # from ..bath import PseudomodeBath
 # from .base import DynamicalModel, SystemOperator
@@ -85,22 +85,15 @@ def HEOM_tensor(hamiltonian, subspace='ge', K=3, level_cutoff=3):
     rho_indices, mat_to_ind = ADO_mappings(N, K, level_cutoff)
     tot_rho = len(rho_indices)
 
-    L = dok_matrix((tot_rho * N * N, tot_rho * N * N))
-
-    # print 'totrho ', tot_rho
-    # print 'N ', N
+    L = lil_matrix((tot_rho * N * N, tot_rho * N * N), dtype=np.complex128)
 
     # Tensor variables:
-    ado_I = np.eye(tot_rho)
-    # ado_zeroes = np.zeros_like(ado_I)
-    # rho_I = np.eye(N)
     rho_Isq = np.eye(N * N)
     Nsq = N ** 2
 
     # unitary evolution:
     H = np.diag(hamiltonian.E(subspace))
     unitary_part = -1j * super_commutator_matrix(H)
-    L = L + np.kron(ado_I, unitary_part)
 
     # list of N vectorized projection operators
     proj_op_left = []
@@ -117,7 +110,7 @@ def HEOM_tensor(hamiltonian, subspace='ge', K=3, level_cutoff=3):
 
         # diagonal shift:
         en_shift = -np.sum(rho_index.dot(v))
-        L[left_slice, left_slice] += rho_Isq * en_shift
+        L[left_slice, left_slice] = unitary_part + rho_Isq * en_shift
 
         print '\ncalculating ADO {}\n{}'.format(n, rho_index)
         # off-diagonal:
@@ -134,13 +127,13 @@ def HEOM_tensor(hamiltonian, subspace='ge', K=3, level_cutoff=3):
                 if p_index is not None:
                     plus_slice = slice(p_index * Nsq, (p_index + 1) * Nsq)
                     commutator = proj_op_left[j] - proj_op_right[j]
-                    L[left_slice, plus_slice] -= 1j * commutator
+                    L[left_slice, plus_slice] = -1j * commutator
 
                 if n_index is not None:
                     minus_slice = slice(n_index * Nsq, (n_index + 1) * Nsq)
                     commutator = c[k] * proj_op_left[j] \
                         - np.conjugate(c[k]) * proj_op_right[j]
-                    L[left_slice, minus_slice] -= 1j * n_jk * commutator
+                    L[left_slice, minus_slice] = -1j * n_jk * commutator
     return L
 
 
