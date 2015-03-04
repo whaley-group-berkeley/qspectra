@@ -100,7 +100,7 @@ def HEOM_tensor(hamiltonian, subspace='ge', K=3, level_cutoff=3):
     # unitary evolution:
     H = np.diag(hamiltonian.E(subspace))
     unitary_part = -1j * super_commutator_matrix(H)
-    L += np.kron(ado_I, unitary_part)
+    L = L + np.kron(ado_I, unitary_part)
 
     # list of N vectorized projection operators
     proj_op_left = []
