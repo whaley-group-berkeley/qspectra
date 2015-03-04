@@ -82,8 +82,10 @@ def HEOM_tensor(hamiltonian, subspace='ge', K=3, level_cutoff=3):
     # print v
     c = get_bath_constants(K, gamma, temp, reorg_en, v)
 
+    print 'creating ADO matrix-index mapping'
     rho_indices, mat_to_ind = ADO_mappings(N, K, level_cutoff)
     tot_rho = len(rho_indices)
+    print 'there are {} ADOs in total'.format(tot_rho)
 
     L = lil_matrix((tot_rho * N * N, tot_rho * N * N), dtype=np.complex128)
 
@@ -98,12 +100,14 @@ def HEOM_tensor(hamiltonian, subspace='ge', K=3, level_cutoff=3):
     # list of N vectorized projection operators
     proj_op_left = []
     proj_op_right = []
+    print 'creating projection operators'
     for n in xrange(N):
         proj_op = np.zeros((N, N))
         proj_op[n, n] = 1
         proj_op_left.append(super_left_matrix(proj_op))
         proj_op_right.append(super_right_matrix(proj_op))
 
+    print 'creating master equation'
     for n, rho_index in enumerate(rho_indices):
         # Loop over \dot{rho_n}
         left_slice = slice(n * Nsq, (n + 1) * Nsq)
