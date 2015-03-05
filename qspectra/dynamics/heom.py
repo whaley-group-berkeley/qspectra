@@ -74,13 +74,13 @@ def HEOM_tensor(hamiltonian, subspace='ge', K=3, level_cutoff=3):
     bath = hamiltonian.bath
     gamma = bath.cutoff_freq
     temp = bath.temperature
-    reorg_en = bath.reorg_energy
+    lmbda = bath.reorg_energy
     # print 'gamma ', gamma
     # print 'temp ', temp
 
     v = matsubara_frequencies(K, gamma, temp)
     # print v
-    c = get_bath_constants(K, gamma, temp, reorg_en, v)
+    c = get_bath_constants(K, gamma, temp, lmbda, v)
 
     print 'creating ADO matrix-index mapping'
     rho_indices, mat_to_ind = ADO_mappings(N, K, level_cutoff)
@@ -127,17 +127,18 @@ def HEOM_tensor(hamiltonian, subspace='ge', K=3, level_cutoff=3):
             n_index = mat_to_ind(rho_index)
             rho_index[index] += 1
 
-            if p_index is not None or n_index is not None:
-                if p_index is not None:
-                    plus_slice = slice(p_index * Nsq, (p_index + 1) * Nsq)
-                    commutator = proj_op_left[j] - proj_op_right[j]
-                    L[left_slice, plus_slice] = -1j * commutator
+            if p_index is not None:
+                plus_slice = slice(p_index * Nsq, (p_index + 1) * Nsq)
+                commutator = proj_op_left[j] - proj_op_right[j]
+                L[left_slice, plus_slice] = -1j * commutator
+                # L[plus_slice, left_slice] = -1j * commutator
 
-                if n_index is not None:
-                    minus_slice = slice(n_index * Nsq, (n_index + 1) * Nsq)
-                    commutator = c[k] * proj_op_left[j] \
-                        - np.conjugate(c[k]) * proj_op_right[j]
-                    L[left_slice, minus_slice] = -1j * n_jk * commutator
+            if n_index is not None:
+                minus_slice = slice(n_index * Nsq, (n_index + 1) * Nsq)
+                commutator = c[k] * proj_op_left[j] \
+                    - np.conjugate(c[k]) * proj_op_right[j]
+                L[left_slice, minus_slice] = -1j * n_jk * commutator
+                # L[minus_slice, left_slice] = -1j * n_jk * commutator
     return csr_matrix(L)
 
 
@@ -210,24 +211,20 @@ def multichoose(n, c):
 
 
 def matsubara_frequencies(K, gamma, T):
-    coef = 2 * np.pi * K_CM * T
-    v = np.arange(K + 1) * coef
+    v = np.arange(K + 1) * 2 * np.pi * T
     v[0] = gamma
-    print v
     return v
 
 
-def get_bath_constants(K, gamma, T, reorg_en, v):
-    eta = 2 * reorg_en
-    inv_T = 1 / (K_CM * T)
+def get_bath_constants(K, gamma, T, lmbda, v):
     bath_list = []
     for k in xrange(K + 1):
         if k is 0:
-            bath_list.append(eta * gamma / 2 *
-                             (1 / np.tan(inv_T * gamma / 2) - 1j))
+            bath_list.append(lmbda * gamma *
+                             (1 / np.tan(gamma / (2 * T)) - 1j))
         elif k > 0:
-            bath_list.append(2 * eta * gamma *
-                             v[k] / (inv_T * (v[k] ** 2 - gamma ** 2)))
+            bath_list.append(4 * lmbda * gamma * T *
+                             v[k] / (v[k] ** 2 - gamma ** 2))
     return bath_list
 
 
