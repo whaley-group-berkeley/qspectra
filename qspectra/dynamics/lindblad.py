@@ -98,7 +98,7 @@ class LindbladModel(LiouvilleSpaceModel):
                                             hilbert_subspace, unit_convert,
                                             evolve_basis, sparse_matrix)
         self.add_imag_term = add_imag_term
-        self.avg_lifetime = avg_lifetime
+        self.avg_lifetime = avg_lifetime * unit_convert
         self.overlap_scale = overlap_scale
 
     @memoized_property
