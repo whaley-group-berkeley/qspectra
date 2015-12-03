@@ -618,10 +618,10 @@ class ElectronicHamiltonian(Hamiltonian):
         return add_braket(labels) if braket else labels
 
     def _get_Fock_basis_labels(self, subspace, labels=None):
-        labels_1exc = [10 ** (self.n_sites - i - 1) for i in range(self.n_sites)]
+        labels_1exc = np.array([10 ** (self.n_sites - i - 1)
+                                for i in range(self.n_sites)], dtype='O')
         labels_full = np.diag(operator_extend(np.diag(labels_1exc), subspace))
         label_indices = [str(i).zfill(self.n_sites) for i in labels_full]
-
         if labels is None:
             return label_indices
         else:
