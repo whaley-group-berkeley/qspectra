@@ -8,6 +8,7 @@ from scipy.sparse import lil_matrix, csr_matrix
 # from .liouville_space import matrix_to_ket_vec
 
 # from ..operator_tools import basis_transform_operator
+
 from .liouville_space import (LiouvilleSpaceModel, super_commutator_matrix,
                               super_left_matrix, super_right_matrix)
 from ..utils import memoized_property
@@ -15,16 +16,41 @@ from ..utils import memoized_property
 K_CM = constants.physical_constants[
     'Boltzmann constant in inverse meters per kelvin'][0] / 100
 
-
-def HEOM_tensor(hamiltonian, subspace='ge', K=3, level_cutoff=3):
+def matsubara_frequencies(M, gamma, T):
     """
-    Calculates the Redfield tensor elements as a 6D array in the energy
-    eigenbasis
+    assuming gamma is the same for all sites
+    """
+    coef = 2 * np.pi * K_CM * T
+    v = np.arange(M + 1) * coef
+    v[0] = gamma
+    return v
 
-    the Liouville space is: (H^m) \tensordot (H^m)
+def corr_func_coeffs(M, gamma, T, reorg_en, matsu_freqs):
+    """
+    returns coefficients  c_{j,m} corresponding to the correlation function:
+    C_j(t) = \sum_{m=0}^\inf c_{j,m} exp(-v_{j,m} t)
 
-    where H is the Hilbert space given in subspace, and m is the total number
-    of auxilary density matrices + 1 (the original density matrix)
+
+    doi: 10.1063/1.3271348
+    """
+    inv_T = 1 / (K_CM * T)
+    bath_coeffs = []
+
+    bath_coeffs.append(reorg_en * gamma * (1 / np.tan(inv_T * gamma / 2) - 1j))
+
+    for m in xrange(1, M + 1):
+        bath_coeffs.append(4 * reorg_en * gamma * matsu_freqs[m] / (inv_T *
+                         (matsu_freqs[m] ** 2 - gamma ** 2)))
+    return bath_coeffs
+
+def HEOM_tensor(hamiltonian, subspace='ge', M=3, level_cutoff=3):
+    """
+    Calculates the HEOM tensor elements in the energy eigenbasis
+
+    the Liouville space is: (H^k) \tensordot (H^k)
+
+    where H is the Hilbert space of the given subspace, and k is the total
+    number of auxilary density matrices + 1 (the original density matrix)
 
     If the hilbert space is n x n, the total shape of the tensor is:
 
@@ -53,9 +79,10 @@ def HEOM_tensor(hamiltonian, subspace='ge', K=3, level_cutoff=3):
     subspace : container, default 'ge'
         Container of any or all of 'g', 'e' and 'f' indicating the desired
         subspaces on which to calculate the HEOM tensor
-    K : cutoff for the number of exponential functions to include in the
+    M : cutoff for the number of exponential functions to include in the
         correlation function
-        (note: summation is 0-indexed, so K+1 exponentials are included)
+        (note: summation is 0-indexed, so M+1 exponentials are included)
+    level_cutoff : level at which heiarchy is truncated
 
     Returns
     -------
@@ -65,39 +92,34 @@ def HEOM_tensor(hamiltonian, subspace='ge', K=3, level_cutoff=3):
         in the system energy eigenbasis
 
     References
-    10.1021/jp109559p (indexing nomenclature refers to eqn. 9)
+    # 10.1021/jp109559p (indexing nomenclature refers to eqn. 9)
+    doi: 10.1063/1.3271348 (eqn. A22)
     ----------
     """
-    # K = hamiltonian.bath.numb_pm
+
     N = hamiltonian.n_states(subspace)
-    # n_site = hamiltonian.n_sites
-    bath = hamiltonian.bath
-    gamma = bath.cutoff_freq
-    temp = bath.temperature
-    lmbda = bath.reorg_energy
-    # print 'gamma ', gamma
-    # print 'temp ', temp
+    gamma = hamiltonian.bath.cutoff_freq
+    temp = hamiltonian.bath.temperature
+    reorg_en = hamiltonian.bath.reorg_energy
 
-    v = matsubara_frequencies(K, gamma, temp)
-    # print v
-    c = get_bath_constants(K, gamma, temp, lmbda, v)
+    matsu_freqs = matsubara_frequencies(M, gamma, temp)
+    bath_coeffs = corr_func_coeffs(M, gamma, temp, reorg_en, matsu_freqs)
 
-    print 'creating ADO matrix-index mapping'
-    rho_indices, mat_to_ind = ADO_mappings(N, K, level_cutoff)
+    rho_indices, mat_to_ind = ADO_mappings(N, M, level_cutoff)
     tot_rho = len(rho_indices)
     print 'there are {} ADOs in total'.format(tot_rho)
 
     L = lil_matrix((tot_rho * N * N, tot_rho * N * N), dtype=np.complex128)
 
     # Tensor variables:
-    rho_Isq = np.eye(N * N)
+    Isq = np.eye(N * N)
     Nsq = N ** 2
 
     # unitary evolution:
     H = np.diag(hamiltonian.E(subspace))
-    unitary_part = -1j * super_commutator_matrix(H)
+    liouvillian = -1j * super_commutator_matrix(H)
 
-    # list of N vectorized projection operators
+    # precompute the list of N vectorized projection operators
     proj_op_left = []
     proj_op_right = []
     print 'creating projection operators'
@@ -113,8 +135,10 @@ def HEOM_tensor(hamiltonian, subspace='ge', K=3, level_cutoff=3):
         left_slice = slice(n * Nsq, (n + 1) * Nsq)
 
         # diagonal shift:
-        en_shift = -np.sum(rho_index.dot(v))
-        L[left_slice, left_slice] = unitary_part + rho_Isq * en_shift
+        en_shift = -np.sum(rho_index.dot(matsu_freqs))
+        L[left_slice, left_slice] = liouvillian + Isq * en_shift
+
+        #double commutator temperature correction!
 
         print '\ncalculating ADO {}\n{}'.format(n, rho_index)
         # off-diagonal:
@@ -135,10 +159,11 @@ def HEOM_tensor(hamiltonian, subspace='ge', K=3, level_cutoff=3):
 
             if n_index is not None:
                 minus_slice = slice(n_index * Nsq, (n_index + 1) * Nsq)
-                commutator = c[k] * proj_op_left[j] \
-                    - np.conjugate(c[k]) * proj_op_right[j]
+                commutator = bath_coeffs[k] * proj_op_left[j] \
+                    - np.conjugate(bath_coeffs[k]) * proj_op_right[j]
                 L[left_slice, minus_slice] = -1j * n_jk * commutator
                 # L[minus_slice, left_slice] = -1j * n_jk * commutator
+    print L.shape
     return csr_matrix(L)
 
 
@@ -210,24 +235,6 @@ def multichoose(n, c):
         [[val[0] + 1] + val[1:] for val in multichoose(n, c - 1)]
 
 
-def matsubara_frequencies(K, gamma, T):
-    v = np.arange(K + 1) * 2 * np.pi * T
-    v[0] = gamma
-    return v
-
-
-def get_bath_constants(K, gamma, T, lmbda, v):
-    bath_list = []
-    for k in xrange(K + 1):
-        if k is 0:
-            bath_list.append(lmbda * gamma *
-                             (1 / np.tan(gamma / (2 * T)) - 1j))
-        elif k > 0:
-            bath_list.append(4 * lmbda * gamma * T *
-                             v[k] / (v[k] ** 2 - gamma ** 2))
-    return bath_list
-
-
 class HEOMModel(LiouvilleSpaceModel):
 
     """
@@ -252,19 +259,19 @@ class HEOMModel(LiouvilleSpaceModel):
     """
 
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
-                 unit_convert=1, level_cutoff=3, K=1):
+                 unit_convert=1, level_cutoff=3, M=1):
         evolve_basis = 'eigen'
         super(HEOMModel, self).__init__(hamiltonian, rw_freq,
                                         hilbert_subspace, unit_convert,
                                         evolve_basis)
         self.level_cutoff = level_cutoff
-        self.K = K
+        self.M = M
 
     @memoized_property
     def evolution_super_operator(self):
         return (self.unit_convert
                 * HEOM_tensor(self.hamiltonian, self.hilbert_subspace,
-                              K=self.K, level_cutoff=self.level_cutoff))
+                              M=self.M, level_cutoff=self.level_cutoff))
 
     def equation_of_motion(self, liouville_subspace, heisenberg_picture=False):
         """
@@ -298,3 +305,4 @@ class HEOMModel(LiouvilleSpaceModel):
         def eom(t, rho_expanded):
             return evolve_matrix.dot(rho_expanded)
         return eom
+
