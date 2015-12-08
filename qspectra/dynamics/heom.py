@@ -5,8 +5,9 @@ from scipy.sparse import lil_matrix, csr_matrix
 
 from .base import DynamicalModel, SystemOperator
 from .liouville_space import (LiouvilleSpaceModel, LiouvilleSpaceOperator,
-                              super_commutator_matrix,
-                              super_left_matrix, super_right_matrix)
+                              super_commutator_sparse_matrix,
+                              super_left_sparse_matrix,
+                              super_right_sparse_matrix)
 from ..utils import memoized_property
 
 class HEOMSpaceOperator(SystemOperator):
@@ -289,7 +290,7 @@ class HEOMModel(LiouvilleSpaceModel):
 
         # unitary evolution:
         H = self.hamiltonian.H(subspace)
-        liouvillian = super_commutator_matrix(H)
+        liouvillian = super_commutator_sparse_matrix(H)
 
         # precompute the list of N vectorized projection operators
         proj_op_left = []
@@ -297,8 +298,8 @@ class HEOMModel(LiouvilleSpaceModel):
 
         for proj_op in self.hamiltonian.system_bath_couplings(
                        self.hilbert_subspace):
-            proj_op_left.append(super_left_matrix(proj_op))
-            proj_op_right.append(super_right_matrix(proj_op))
+            proj_op_left.append(super_left_sparse_matrix(proj_op))
+            proj_op_right.append(super_right_sparse_matrix(proj_op))
 
         matsu_freqs_inf = matsubara_frequencies(K + 5000, gamma, temp)
         bath_coeffs_inf = corr_func_coeffs(K + 5000, gamma, temp, reorg_en, matsu_freqs_inf)
@@ -317,7 +318,7 @@ class HEOMModel(LiouvilleSpaceModel):
                 temp = np.zeros((N ** 2, N ** 2))
                 for j in xrange(N):
                     temp += (proj_op_left[j] + proj_op_right[j]
-                        - 2 * np.dot(proj_op_left[j], proj_op_right[j]))
+                            - 2 * proj_op_left[j].dot(proj_op_right[j]))
                 L[left_slice, left_slice] -= temp_corr_coeff * temp
 
             print '\ncalculating ADO {}\n{}'.format(n, ado_index)
