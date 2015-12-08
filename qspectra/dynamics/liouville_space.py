@@ -231,6 +231,20 @@ class LiouvilleSpaceModel(DynamicalModel):
         self.evolve_basis = evolve_basis
         self.sparse_matrix = sparse_matrix
 
+    def preprocess(self, rho):
+        """
+        function applied to rho before running dynamics
+        """
+        rho.flatten()
+        return rho
+
+    def postprocess(self, rho):
+        """
+        function applied to rho after running dynamics
+        """
+        N = int(np.sqrt(rho.shape[-1]))
+        return rho.reshape(-1, N, N)
+
     @property
     def evolve_basis(self):
         return self._evolve_basis

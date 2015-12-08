@@ -178,6 +178,7 @@ class HEOMModel(LiouvilleSpaceModel):
         self.K = K
         self.low_temp_corr = low_temp_corr
 
+
     @memoized_property
     def evolution_super_operator(self):
         return (self.unit_convert
@@ -202,17 +203,26 @@ class HEOMModel(LiouvilleSpaceModel):
         size = evolve_matrix.shape
         hilbert_size_sq = self.hamiltonian.n_states(self.hilbert_subspace) ** 2
 
-        # workaround: we save the pre/postprocessing functions as properties
-        # this makes the HEOM a stateful object
-        def _preprocess(rdo):
+
+        def _preprocess(self, rho):
+            """
+            function applied to rho before running dynamics
+            """
+
+            rho = super(HEOMModel, self).preprocess(rho)
             ado_operator = np.zeros(size[0], dtype=np.complex128)
-            ado_operator[:hilbert_size_sq] = rdo
+            ado_operator[:hilbert_size_sq] = rho
             return ado_operator
+
         self.preprocess = _preprocess
 
-        def postprocess(vec):
-            return vec[:hilbert_size_sq]
-        self.postprocess = postprocess
+        def _postprocess(self, rho):
+            """
+            function applied to rho after running dynamics
+            """
+            rho = rho[-1, :hilbert_size_sq]
+            rho = super(HEOMModel, self).postprocess(rho)
+        self.postprocess = _postprocess
 
         def eom(t, rho_expanded):
             return evolve_matrix.dot(rho_expanded)
@@ -315,7 +325,7 @@ class HEOMModel(LiouvilleSpaceModel):
             L[left_slice, left_slice] = -1j * liouvillian - Isq * en_shift
 
             #double commutator temperature correction!
-            if temp_corr_coeff:
+            if low_temp_corr:
                 temp = np.zeros((N ** 2, N ** 2))
                 for j in xrange(N):
                     temp += (proj_op_left[j] + proj_op_right[j]

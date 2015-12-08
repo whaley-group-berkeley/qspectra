@@ -49,6 +49,19 @@ class DynamicalModel(object):
     def __repr__(self):
         return inspect_repr(self)
 
+
+    def preprocess(self, rho):
+        """
+        function applied to rho before running dynamics
+        """
+        return rho
+
+    def postprocess(self, rho):
+        """
+        function applied to rho after running dynamics
+        """
+        return rho
+
     @abstractmethod
     def thermal_state(self, liouville_subspace):
         """
