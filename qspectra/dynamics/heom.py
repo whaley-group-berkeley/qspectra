@@ -181,7 +181,7 @@ class HEOMModel(LiouvilleSpaceModel):
     @memoized_property
     def evolution_super_operator(self):
         return (self.unit_convert
-                * self.HEOM_tensor(self.hamiltonian, self.hilbert_subspace,
+                * self.HEOM_tensor(self.hilbert_subspace,
                               K=self.K, level_cutoff=self.level_cutoff,
                               low_temp_corr=self.low_temp_corr))
 
@@ -218,7 +218,7 @@ class HEOMModel(LiouvilleSpaceModel):
             return evolve_matrix.dot(rho_expanded)
         return eom
 
-    def HEOM_tensor(self, hamiltonian, subspace='ge', K=3, level_cutoff=3, low_temp_corr=True):
+    def HEOM_tensor(self, subspace='ge', K=3, level_cutoff=3, low_temp_corr=True):
         """
         Calculates the HEOM tensor elements in the energy eigenbasis
 
@@ -249,8 +249,6 @@ class HEOMModel(LiouvilleSpaceModel):
 
         Parameters
         ----------
-        hamiltonian : hamiltonian.Hamiltonian
-            Hamiltonian object specifying the system
         subspace : container, default 'ge'
             Container of any or all of 'g', 'e' and 'f' indicating the desired
             subspaces on which to calculate the HEOM tensor
@@ -272,10 +270,10 @@ class HEOMModel(LiouvilleSpaceModel):
         ----------
         """
 
-        N = hamiltonian.n_states(subspace)
-        gamma = hamiltonian.bath.cutoff_freq
-        temp = hamiltonian.bath.temperature
-        reorg_en = hamiltonian.bath.reorg_energy
+        N = self.hamiltonian.n_states(subspace)
+        gamma = self.hamiltonian.bath.cutoff_freq
+        temp = self.hamiltonian.bath.temperature
+        reorg_en = self.hamiltonian.bath.reorg_energy
 
         matsu_freqs = matsubara_frequencies(K, gamma, temp)
         bath_coeffs = corr_func_coeffs(K, gamma, temp, reorg_en, matsu_freqs)
@@ -290,15 +288,15 @@ class HEOMModel(LiouvilleSpaceModel):
                                                 range(len(ado_indices))]
 
         # unitary evolution:
-        H = hamiltonian.H(subspace)
+        H = self.hamiltonian.H(subspace)
         liouvillian = super_commutator_matrix(H)
 
         # precompute the list of N vectorized projection operators
         proj_op_left = []
         proj_op_right = []
-        for n in xrange(N):
-            proj_op = np.zeros((N, N))
-            proj_op[n, n] = 1
+
+        for proj_op in self.hamiltonian.system_bath_couplings(
+                       self.hilbert_subspace):
             proj_op_left.append(super_left_matrix(proj_op))
             proj_op_right.append(super_right_matrix(proj_op))
 
