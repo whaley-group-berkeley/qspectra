@@ -231,19 +231,25 @@ class LiouvilleSpaceModel(DynamicalModel):
         self.evolve_basis = evolve_basis
         self.sparse_matrix = sparse_matrix
 
-    def preprocess(self, rho):
+    def density_matrix_to_state_vector(self, rho0, liouville_subspace):
         """
-        function applied to rho before running dynamics
+        turn a density matrix into a state vector to use as the
+        diff eq initial condition
         """
-        rho.flatten()
-        return rho
 
-    def postprocess(self, rho):
+        state0 = matrix_to_ket_vec(rho0)
+        state0 = self.map_between_subspaces(
+            state0, full_liouville_subspace(liouville_subspace),
+            liouville_subspace)
+        return state0
+
+    def state_vector_to_density_matrix(self, rho):
         """
-        function applied to rho after running dynamics
+        turn the diff eq trajectory (list of state vectors) into a
+        list of density matrices
         """
         N = int(np.sqrt(rho.shape[-1]))
-        return rho.reshape(-1, N, N)
+        return rho.reshape(-1, N, N, order='F')
 
     @property
     def evolve_basis(self):

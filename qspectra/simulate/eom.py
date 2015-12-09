@@ -13,13 +13,14 @@ def _simulate_dynamics(dynamical_model, initial_state, duration, times,
                        liouville_subspace, save_func, **integrate_kwargs):
     eom = dynamical_model.equation_of_motion(liouville_subspace)
 
-    initial_state = dynamical_model.preprocess(initial_state)
+    initial_state = dynamical_model.density_matrix_to_state_vector(initial_state, liouville_subspace)
     t = (np.arange(0, duration, dynamical_model.time_step)
          if times is None else times)
     states = integrate(eom, initial_state, t, save_func=save_func,
                        **integrate_kwargs)
-    states = dynamical_model.postprocess(states)
-    return (t, states)
+    print states.shape
+    rhos = dynamical_model.state_vector_to_density_matrix(states)
+    return (t, rhos)
 
 
 def simulate_dynamics(dynamical_model, initial_state, duration=None, times=None,

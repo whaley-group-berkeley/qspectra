@@ -228,6 +228,27 @@ class HEOMModel(LiouvilleSpaceModel):
             return evolve_matrix.dot(rho_expanded)
         return eom
 
+    def density_matrix_to_state_vector(self, rho0, liouville_subspace):
+        """
+        turn a density matrix into a state vector to use as the
+        diff eq initial condition
+        """
+        state0 = super(HEOMModel, self).density_matrix_to_state_vector(rho0, liouville_subspace)
+        # HEOM_state0 = np.zeros(state0.size * self.ado_count, dtype=complex)
+        HEOM_state0 = np.zeros(state0.size * len(self.ado_slices), dtype=complex)
+        HEOM_state0[:state0.size] = state0
+        return HEOM_state0
+
+    def state_vector_to_density_matrix(self, rhos):
+        """
+        turn the diff eq trajectory (list of state vectors) into a
+        list of density matrices
+        """
+        Nsq = rhos.shape[-1] / len(self.ado_slices)
+        rhos = rhos[:,:Nsq]
+        temp =  super(HEOMModel, self).state_vector_to_density_matrix(rhos)
+        return temp
+
     def HEOM_tensor(self, hamiltonian, subspace='ge', K=3, level_cutoff=3, low_temp_corr=True):
         """
         Calculates the HEOM tensor elements in the energy eigenbasis

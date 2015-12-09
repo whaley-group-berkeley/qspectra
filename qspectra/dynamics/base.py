@@ -50,15 +50,17 @@ class DynamicalModel(object):
         return inspect_repr(self)
 
 
-    def preprocess(self, rho):
+    def density_matrix_to_state_vector(self, rho):
         """
-        function applied to rho before running dynamics
+        turn a density matrix into a state vector to use as the
+        diff eq initial condition
         """
         return rho
 
-    def postprocess(self, rho):
+    def state_vector_density_matrix(self, rho):
         """
-        function applied to rho after running dynamics
+        turn the diff eq trajectory (list of state vectors) into a
+        list of density matrices
         """
         return rho
 
