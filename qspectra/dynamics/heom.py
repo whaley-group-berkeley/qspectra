@@ -279,9 +279,8 @@ class HEOMModel(DynamicalModel):
         turn a density matrix into a state vector to use as the
         diff eq initial condition
         """
-        state0 = super(HEOMModel, self).density_matrix_to_state_vector(rho0, liouville_subspace)
-        # HEOM_state0 = np.zeros(state0.size * self.ado_count, dtype=complex)
-        HEOM_state0 = np.zeros(state0.size * len(self.ado_slices), dtype=complex)
+        state0 = self.lspace_model.density_matrix_to_state_vector(rho0, liouville_subspace)
+        HEOM_state0 = np.zeros(state0.size * self.ado_count, dtype=complex)
         HEOM_state0[:state0.size] = state0
         return HEOM_state0
 
@@ -290,9 +289,9 @@ class HEOMModel(DynamicalModel):
         turn the diff eq trajectory (list of state vectors) into a
         list of density matrices
         """
-        Nsq = rhos.shape[-1] / len(self.ado_slices)
+        Nsq = rhos.shape[-1] / self.ado_count
         rhos = rhos[:,:Nsq]
-        temp =  super(HEOMModel, self).state_vector_to_density_matrix(rhos)
+        temp = self.lspace_model.state_vector_to_density_matrix(rhos)
         return temp
 
     def HEOM_tensor(self, liouville_subspace):
@@ -363,7 +362,7 @@ class HEOMModel(DynamicalModel):
         reorg_en = self.hamiltonian.bath.reorg_energy
 
         matsu_freqs = matsubara_frequencies(K, gamma, temp)
-        bath_coeffs = corr_func_coeffs(K, gamma, temp, reorg_en, matsu_freqs, aki_temp_corr)
+        bath_coeffs = corr_func_coeffs(K, gamma, temp, reorg_en, matsu_freqs, self.aki_temp_corr)
 
         L = lil_matrix((ado_count * M, ado_count * M), dtype=np.complex128)
 
@@ -385,7 +384,7 @@ class HEOMModel(DynamicalModel):
             proj_op_right.append(super_right_sparse_matrix(proj_op)[subspace_mesh])
 
         matsu_freqs_inf = matsubara_frequencies(K + 5000, gamma, temp)
-        bath_coeffs_inf = corr_func_coeffs(K + 5000, gamma, temp, reorg_en, matsu_freqs_inf, aki_temp_corr)
+        bath_coeffs_inf = corr_func_coeffs(K + 5000, gamma, temp, reorg_en, matsu_freqs_inf, self.aki_temp_corr)
 
         if self.aki_temp_corr:
             temp_corr_coeff = bath_coeffs_inf[1] / matsu_freqs_inf[1]               # AKIs
@@ -421,7 +420,7 @@ class HEOMModel(DynamicalModel):
                 if p_index is not None:
                     plus_slice = ado_slices[p_index]
                     commutator = proj_op_left[j] - proj_op_right[j]
-                    if modified_HEOM:
+                    if self.modified_HEOM:
                         mod_coef = np.sqrt((n_jk + 1) *
                                            np.abs(bath_coeffs[k]))
                     else:
@@ -432,13 +431,13 @@ class HEOMModel(DynamicalModel):
                     minus_slice = ado_slices[n_index]
                     commutator = bath_coeffs[k] * proj_op_left[j] \
                         - np.conjugate(bath_coeffs[k]) * proj_op_right[j]
-                    if modified_HEOM:
+                    if self.modified_HEOM:
                         mod_coef = np.sqrt(n_jk / np.abs(bath_coeffs[k]))
                     else:
                         mod_coef = n_jk
 
                     L[left_slice, minus_slice] = -1j * mod_coef * commutator
-                    if aki_temp_corr:
+                    if self.aki_temp_corr:
                         commutator2 =  (proj_op_left[j] - proj_op_right[j])
                         L[left_slice, minus_slice] +=  (-1j * 4 * reorg_en * gamma ** 2 * temp / (matsu_freqs_inf[1] ** 2 - gamma ** 2)) * commutator2
         return csr_matrix(L)
