@@ -18,6 +18,7 @@ from simulate.eom import (simulate_dynamics, simulate_with_fields,
                           simulate_pump)
 from simulate.response import (linear_response, absorption_spectra,
                                impulsive_probe, third_order_response,
+                               two_dimensional_spectra,
                                PUMP_PROBE_PATHWAYS, THIRD_ORDER_PATHWAYS)
 from simulate.utils import fourier_transform, integrate, bound_signal
 

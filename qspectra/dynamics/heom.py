@@ -36,9 +36,9 @@ class HEOMSpaceOperator(SystemOperator):
     @property
     def bra_vector(self):
         lspace_bra = self.lspace_op.bra_vector
-        bra = np.zeros(lspace_bra * self.ado_count, dtype=complex)
+        bra = np.zeros(lspace_bra.size * self.ado_count, dtype=complex)
         bra[:lspace_bra.size] = lspace_bra
-        return lspace_bra
+        return bra
 
     def left_multiply(self, state):
         return map_over_ados(self.lspace_op.left_multiply, state,
@@ -231,11 +231,12 @@ class HEOMModel(DynamicalModel):
         subspace, a function which takes a state vector and returns its first
         time derivative, for use in a numerical integration routine
         """
-        if heisenberg_picture:
-            raise NotImplementedError('HEOM not implemented in the Heisenberg '
-                                      'picture')
-
         evolve_matrix = self.unit_convert * self.HEOM_tensor(liouville_subspace)
+
+        if heisenberg_picture:
+            evolve_matrix = evolve_matrix.T
+
+        evolve_matrix = csr_matrix(evolve_matrix)
 
         def eom(t, rho_expanded):
             return evolve_matrix.dot(rho_expanded)
@@ -406,7 +407,6 @@ class HEOMModel(DynamicalModel):
                     temp += (proj_l + proj_r - 2 * proj_l.dot(proj_r))
                 L[left_slice, left_slice] -= temp_corr_coeff * temp
 
-            print '\ncalculating ADO {}\n{}'.format(n, ado_index)
             # off-diagonal:
             for index, n_jk in np.ndenumerate(ado_index):
                 # Loop over j and k (the sub-indices within the ado_index matrix)
@@ -440,4 +440,4 @@ class HEOMModel(DynamicalModel):
                     if self.aki_temp_corr:
                         commutator2 =  (proj_op_left[j] - proj_op_right[j])
                         L[left_slice, minus_slice] +=  (-1j * 4 * reorg_en * gamma ** 2 * temp / (matsu_freqs_inf[1] ** 2 - gamma ** 2)) * commutator2
-        return csr_matrix(L)
+        return L

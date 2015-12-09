@@ -425,3 +425,31 @@ def third_order_response(dynamical_model, coherence_time_max,
         ensemble_random_orientations=ensemble_random_orientations,
         exact_isotropic_average=exact_isotropic_average,
         **integrate_kwargs)
+
+
+def two_dimensional_spectra(dynamical_model, coherence_time_max,
+                            population_time_max=None, population_times=None,
+                            geometry='-++', polarization='xxxx',
+                            include_signal=None, ensemble_size=None,
+                            ensemble_random_orientations=False,
+                            exact_isotropic_average=False,
+                            **integrate_kwargs):
+    """
+    Calculate the 2D spectrum from the third order response
+
+    TODO: optimize this method
+    """
+    (t1, t2, t3), X = third_order_response(
+        dynamical_model, coherence_time_max, population_time_max,
+        population_times, geometry, polarization, include_signal,
+        ensemble_size, ensemble_random_orientations, exact_isotropic_average,
+        **integrate_kwargs)
+
+    rw_freq = dynamical_model.rw_freq
+    unit_convert = dynamical_model.unit_convert
+
+    f1, X_ftt = fourier_transform(t1, X, 0, rw_freq=rw_freq, sign=-1,
+                                  unit_convert=unit_convert)
+    f3, X_ftf = fourier_transform(t3, X_ftt, 2, rw_freq=rw_freq,
+                                  unit_convert=unit_convert)
+    return (f1, t2, f3), X_ftf
