@@ -236,7 +236,6 @@ class LiouvilleSpaceModel(DynamicalModel):
         turn a density matrix into a state vector to use as the
         diff eq initial condition
         """
-
         state0 = matrix_to_ket_vec(rho0)
         state0 = self.map_between_subspaces(
             state0, full_liouville_subspace(liouville_subspace),
