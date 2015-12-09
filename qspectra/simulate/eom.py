@@ -10,23 +10,24 @@ from .utils import integrate
 
 @optional_ensemble_average
 def _simulate_dynamics(dynamical_model, initial_state, duration, times,
-                       liouville_subspace, save_func, process,
-                       **integrate_kwargs):
+                       liouville_subspace, save_func, **integrate_kwargs):
     eom = dynamical_model.equation_of_motion(liouville_subspace)
 
-    if process:
-        initial_state = dynamical_model.preprocess(initial_state)
-        # overrides the save_func argument
-        save_func = dynamical_model.postprocess
+    initial_state = np.asarray(initial_state)
+    if initial_state.ndim == 1:
+        # initial state is a wavefunction - turn it into a density matrix
+        initial_state = np.outer(initial_state.conj(), initial_state)
+    initial_state = dynamical_model.density_matrix_to_state_vector(initial_state, liouville_subspace)
     t = (np.arange(0, duration, dynamical_model.time_step)
          if times is None else times)
     states = integrate(eom, initial_state, t, save_func=save_func,
                        **integrate_kwargs)
-    return (t, states)
+    rhos = dynamical_model.state_vector_to_density_matrix(states)
+    return (t, rhos)
 
 
 def simulate_dynamics(dynamical_model, initial_state, duration=None, times=None,
-                      liouville_subspace='ee', save_func=None, process=False,
+                      liouville_subspace='ee', save_func=None,
                       ensemble_size=None, ensemble_random_orientations=False,
                       **integrate_kwargs):
     """
@@ -68,7 +69,7 @@ def simulate_dynamics(dynamical_model, initial_state, duration=None, times=None,
     """
     return _simulate_dynamics(
         dynamical_model, initial_state, duration, times, liouville_subspace,
-        save_func, process, ensemble_size=ensemble_size,
+        save_func, ensemble_size=ensemble_size,
         ensemble_random_orientations=ensemble_random_orientations,
         **integrate_kwargs)
 
