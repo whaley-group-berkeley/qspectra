@@ -10,29 +10,53 @@ from .liouville_space import (LiouvilleSpaceModel, LiouvilleSpaceOperator,
                               super_right_sparse_matrix)
 from ..utils import memoized_property
 
+
+def map_over_ados(func, state, result_size, ado_slices):
+    result = np.zeros(result_size, dtype=complex)
+    for to_slice, from_slice in ado_slices:
+        ado = state[from_slice]
+        result[to_slice] = func(ado)
+    return result
+
+
 class HEOMSpaceOperator(SystemOperator):
-    def __init__(self, dynamical_model, *args, **kwargs):
-        self.dynamical_model = dynamical_model
-        self.lspace_op = LiouvilleSpaceOperator(*args, **kwargs)
-        self.ado_slices = dynamical_model.ado_slices
+    def __init__(self, operator, liouv_subspace_map, dynamical_model):
+        self.lspace_op = LiouvilleSpaceOperator(operator, liouv_subspace_map,
+                                                dynamical_model.lspace_model)
+        # self.ado_slices = dynamical_model.ado_slices
+        self.ado_count = dynamical_model.ado_count
+
+        to_size = self.lspace_op.to_indices.size
+        from_size = self.lspace_op.from_indices.size
+        self.ado_slices = [(slice(n * to_size, (n + 1) * to_size),
+                            slice(n * from_size, (n + 1) * from_size))
+                           for n in range(self.ado_count)]
+        self.result_size = to_size * self.ado_count
+
+    @property
+    def bra_vector(self):
+        lspace_bra = self.lspace_op.bra_vector
+        bra = np.zeros(lspace_bra * self.ado_count, dtype=complex)
+        bra[:lspace_bra.size] = lspace_bra
+        return lspace_bra
 
     def left_multiply(self, state):
-        result = np.empty_like(state)
-        for sl in self.ado_slices:
-            ado = state[sl]
-            result[sl] = self.lspace_op.left_multiply(ado)
-        return result
+        return map_over_ados(self.lspace_op.left_multiply, state,
+                             self.result_size, self.ado_slices)
 
     def right_multiply(self, state):
-        result = np.empty_like(state)
-        for sl in self.ado_slices:
-            ado = state[sl]
-            result[sl] = self.lspace_op.right_multiply(ado)
-        return result
+        return map_over_ados(self.lspace_op.right_multiply, state,
+                             self.result_size, self.ado_slices)
+
+    def commutator(self, state):
+        return map_over_ados(self.lspace_op.commutator, state,
+                             self.result_size, self.ado_slices)
 
     def expectation_value(self, state):
-        rho = state(self.ado_slices[0])
+        _, from_slice = self.ado_slices[0]
+        rho = state[from_slice]
         return self.lspace_op.expectation_value(rho)
+
 
 def matsubara_frequencies(K, gamma, T):
     """
@@ -146,7 +170,7 @@ def multichoose(n, c):
         [[val[0] + 1] + val[1:] for val in multichoose(n, c - 1)]
 
 
-class HEOMModel(LiouvilleSpaceModel):
+class HEOMModel(DynamicalModel):
 
     """
     DynamicalModel for HEOM
@@ -168,23 +192,26 @@ class HEOMModel(LiouvilleSpaceModel):
     References
     ----------
     """
+    system_operator = HEOMSpaceOperator
 
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
                  unit_convert=1, level_cutoff=3, K=1, low_temp_corr=True):
         evolve_basis = 'site'
         super(HEOMModel, self).__init__(hamiltonian, rw_freq,
-                                        hilbert_subspace, unit_convert,
-                                        evolve_basis)
+                                        hilbert_subspace, unit_convert)
+
+        self.lspace_model = LiouvilleSpaceModel(
+            hamiltonian, rw_freq, hilbert_subspace, unit_convert, evolve_basis)
         self.level_cutoff = level_cutoff
         self.K = K
         self.low_temp_corr = low_temp_corr
 
-    @memoized_property
-    def evolution_super_operator(self):
-        return (self.unit_convert
-                * self.HEOM_tensor(self.hilbert_subspace,
-                              K=self.K, level_cutoff=self.level_cutoff,
-                              low_temp_corr=self.low_temp_corr))
+        # calculate ADO properties
+        N = self.hamiltonian.n_sites
+        ado_indices, mat_to_ind = ADO_mappings(N, K, level_cutoff)
+        self.ado_count = len(ado_indices)
+        self.ado_indices = ado_indices
+        self.mat_to_ind = mat_to_ind
 
     def equation_of_motion(self, liouville_subspace, heisenberg_picture=False):
         """
@@ -196,30 +223,46 @@ class HEOMModel(LiouvilleSpaceModel):
             raise NotImplementedError('HEOM not implemented in the Heisenberg '
                                       'picture')
 
-        # index = self.liouville_subspace_index(liouville_subspace)
-        # mesh = np.ix_(index, index)
-        # evolve_matrix = self.evolution_super_operator[mesh]
-        evolve_matrix = self.evolution_super_operator
-        size = evolve_matrix.shape
-        hilbert_size_sq = self.hamiltonian.n_states(self.hilbert_subspace) ** 2
-
-        # workaround: we save the pre/postprocessing functions as properties
-        # this makes the HEOM a stateful object
-        def _preprocess(rdo):
-            ado_operator = np.zeros(size[0], dtype=np.complex128)
-            ado_operator[:hilbert_size_sq] = rdo
-            return ado_operator
-        self.preprocess = _preprocess
-
-        def postprocess(vec):
-            return vec[:hilbert_size_sq]
-        self.postprocess = postprocess
+        evolve_matrix = self.unit_convert * self.HEOM_tensor(liouville_subspace)
 
         def eom(t, rho_expanded):
             return evolve_matrix.dot(rho_expanded)
+
         return eom
 
-    def HEOM_tensor(self, subspace='ge', K=3, level_cutoff=3, low_temp_corr=True):
+    def thermal_state(self, liouville_subspace):
+        rho0 = self.lspace_model.thermal_state(liouville_subspace)
+        rho = np.zeros(rho0.size * self.ado_count, dtype=complex)
+        rho[:rho0.size] = rho0
+        return rho
+
+    def dipole_operator(self, liouv_subspace_map, polarization,
+                        transitions='-+'):
+        """
+        Return a dipole operator that follows the SystemOperator API for the
+        given liouville_subspace_map, polarization and requested transitions.
+        The operator will be defined in the same basis as self.evolve_basis
+        """
+        operator = self.hamiltonian.dipole_operator(self.hilbert_subspace,
+                                                    polarization, transitions)
+        return HEOMSpaceOperator(operator, liouv_subspace_map, self)
+
+    def map_between_subspaces(self, state, from_subspace, to_subspace):
+
+        def map_ss(liouville_space_state):
+            return self.lspace_model.map_between_subspaces(
+                liouville_space_state, from_subspace, to_subspace)
+
+        from_size, to_size = [
+            self.lspace_model.liouville_subspace_index(ss).size
+            for ss in [from_subspace, to_subspace]]
+        ado_slices = [(slice(n * to_size, (n + 1) * to_size),
+                       slice(n * from_size, (n + 1) * from_size))
+                      for n in range(self.ado_count)]
+        result_size = to_size * self.ado_count
+        return map_over_ados(map_ss, state, result_size, ado_slices)
+
+    def HEOM_tensor(self, liouville_subspace):
         """
         Calculates the HEOM tensor elements in the energy eigenbasis
 
@@ -270,8 +313,18 @@ class HEOMModel(LiouvilleSpaceModel):
         doi: 10.1063/1.3271348 (eqn. A22)
         ----------
         """
+        subspace = self.hilbert_subspace
+        K = self.K
+        level_cutoff = self.level_cutoff
+        low_temp_corr = self.low_temp_corr
+
+        ado_count = self.ado_count
+
+        subspace_index = self.lspace_model.liouville_subspace_index(liouville_subspace)
+        subspace_mesh = np.ix_(subspace_index, subspace_index)
 
         N = self.hamiltonian.n_states(subspace)
+        M = subspace_index.size
         gamma = self.hamiltonian.bath.cutoff_freq
         temp = self.hamiltonian.bath.temperature
         reorg_en = self.hamiltonian.bath.reorg_energy
@@ -279,18 +332,15 @@ class HEOMModel(LiouvilleSpaceModel):
         matsu_freqs = matsubara_frequencies(K, gamma, temp)
         bath_coeffs = corr_func_coeffs(K, gamma, temp, reorg_en, matsu_freqs)
 
-        ado_indices, mat_to_ind = ADO_mappings(N, K, level_cutoff)
+        L = lil_matrix((ado_count * M, ado_count * M), dtype=np.complex128)
 
-        tot_rho = len(ado_indices)
-        L = lil_matrix((tot_rho * N * N, tot_rho * N * N), dtype=np.complex128)
-
-        Isq = np.eye(N * N)
-        self.ado_slices = [slice(n * N ** 2, (n + 1) * N ** 2) for n in
-                                                range(len(ado_indices))]
+        Isq = np.eye(M)
+        ado_slices = [slice(n * M, (n + 1) * M)
+                      for n in range(ado_count)]
 
         # unitary evolution:
         H = self.hamiltonian.H(subspace)
-        liouvillian = super_commutator_sparse_matrix(H)
+        liouvillian = super_commutator_sparse_matrix(H)[subspace_mesh]
 
         # precompute the list of N vectorized projection operators
         proj_op_left = []
@@ -298,24 +348,24 @@ class HEOMModel(LiouvilleSpaceModel):
 
         for proj_op in self.hamiltonian.system_bath_couplings(
                        self.hilbert_subspace):
-            proj_op_left.append(super_left_sparse_matrix(proj_op))
-            proj_op_right.append(super_right_sparse_matrix(proj_op))
+            proj_op_left.append(super_left_sparse_matrix(proj_op)[subspace_mesh])
+            proj_op_right.append(super_right_sparse_matrix(proj_op)[subspace_mesh])
 
         matsu_freqs_inf = matsubara_frequencies(K + 5000, gamma, temp)
         bath_coeffs_inf = corr_func_coeffs(K + 5000, gamma, temp, reorg_en, matsu_freqs_inf)
         temp_corr_coeff = np.sum((bath_coeffs_inf / matsu_freqs_inf)[K + 1:])
 
-        for n, ado_index in enumerate(ado_indices):
+        for n, ado_index in enumerate(self.ado_indices):
             # Loop over \dot{rho_n}
-            left_slice = self.ado_slices[n]
+            left_slice = ado_slices[n]
 
             # diagonal shift:
             en_shift = np.sum(ado_index.dot(matsu_freqs))
             L[left_slice, left_slice] = -1j * liouvillian - Isq * en_shift
 
             #double commutator temperature correction!
-            if temp_corr_coeff:
-                temp = np.zeros((N ** 2, N ** 2))
+            if self.low_temp_corr:
+                temp = np.zeros((M, M))
                 for j in xrange(N):
                     temp += (proj_op_left[j] + proj_op_right[j]
                             - 2 * proj_op_left[j].dot(proj_op_right[j]))
@@ -327,18 +377,18 @@ class HEOMModel(LiouvilleSpaceModel):
                 # Loop over j and k (the sub-indices within the ado_index matrix)
                 j, k = index
                 ado_index[index] += 1
-                p_index = mat_to_ind(ado_index)
+                p_index = self.mat_to_ind(ado_index)
                 ado_index[index] -= 2
-                n_index = mat_to_ind(ado_index)
+                n_index = self.mat_to_ind(ado_index)
                 ado_index[index] += 1
 
                 if p_index is not None:
-                    plus_slice = self.ado_slices[p_index]
+                    plus_slice = ado_slices[p_index]
                     commutator = proj_op_left[j] - proj_op_right[j]
                     L[left_slice, plus_slice] = -1j * commutator
 
                 if n_index is not None:
-                    minus_slice = self.ado_slices[n_index]
+                    minus_slice = ado_slices[n_index]
                     commutator = bath_coeffs[k] * proj_op_left[j] \
                         - np.conjugate(bath_coeffs[k]) * proj_op_right[j]
                     L[left_slice, minus_slice] = -1j * n_jk * commutator

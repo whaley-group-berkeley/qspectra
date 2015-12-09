@@ -5,6 +5,7 @@ from dynamics.liouville_space import (n_excitations, matrix_to_ket_vec,
 from dynamics.redfield import RedfieldModel
 from dynamics.unitary import UnitaryModel
 from dynamics.zofe import ZOFEModel
+from dynamics.heom import HEOMModel
 from hamiltonian import (Hamiltonian, ElectronicHamiltonian,
                          VibronicHamiltonian)
 from operator_tools import (unit_vec, basis_transform_operator,
