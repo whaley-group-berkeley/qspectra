@@ -12,11 +12,18 @@ from .utils import integrate
 def _simulate_dynamics(dynamical_model, initial_state, duration, times,
                        liouville_subspace, save_func, **integrate_kwargs):
     eom = dynamical_model.equation_of_motion(liouville_subspace)
+
+    initial_state = np.asarray(initial_state)
+    if initial_state.ndim == 1:
+        # initial state is a wavefunction - turn it into a density matrix
+        initial_state = np.outer(initial_state.conj(), initial_state)
+    initial_state = dynamical_model.density_matrix_to_state_vector(initial_state, liouville_subspace)
     t = (np.arange(0, duration, dynamical_model.time_step)
          if times is None else times)
     states = integrate(eom, initial_state, t, save_func=save_func,
                        **integrate_kwargs)
-    return (t, states)
+    rhos = dynamical_model.state_vector_to_density_matrix(states)
+    return (t, rhos)
 
 
 def simulate_dynamics(dynamical_model, initial_state, duration=None, times=None,

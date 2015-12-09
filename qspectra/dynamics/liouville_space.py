@@ -1,6 +1,6 @@
 import itertools
 import numpy as np
-from scipy.sparse import csr_matrix
+from scipy.sparse import lil_matrix, csr_matrix
 from .base import DynamicalModel, SystemOperator
 from ..operator_tools import (SubspaceError, n_excitations,
                               full_liouville_subspace)
@@ -131,6 +131,23 @@ def super_right_matrix(operator):
     return np.kron(operator.T, I)
 
 
+def make_sparse(make_super_op):
+    def make_sparse_super_op(op):
+        return lil_matrix(make_super_op(op))
+    return make_sparse_super_op
+
+@make_sparse
+def super_right_sparse_matrix(operator):
+    return super_right_matrix(operator)
+
+@make_sparse
+def super_left_sparse_matrix(operator):
+    return super_left_matrix(operator)
+
+@make_sparse
+def super_commutator_sparse_matrix(operator):
+    return super_commutator_matrix(operator)
+
 class LiouvilleSpaceOperator(SystemOperator):
     """
     Parameters
@@ -230,6 +247,25 @@ class LiouvilleSpaceModel(DynamicalModel):
                                                   unit_convert)
         self.evolve_basis = evolve_basis
         self.sparse_matrix = sparse_matrix
+
+    def density_matrix_to_state_vector(self, rho0, liouville_subspace):
+        """
+        turn a density matrix into a state vector to use as the
+        diff eq initial condition
+        """
+        state0 = matrix_to_ket_vec(rho0)
+        state0 = self.map_between_subspaces(
+            state0, full_liouville_subspace(liouville_subspace),
+            liouville_subspace)
+        return state0
+
+    def state_vector_to_density_matrix(self, rho):
+        """
+        turn the diff eq trajectory (list of state vectors) into a
+        list of density matrices
+        """
+        N = int(np.sqrt(rho.shape[-1]))
+        return rho.reshape(-1, N, N, order='F')
 
     @property
     def evolve_basis(self):
