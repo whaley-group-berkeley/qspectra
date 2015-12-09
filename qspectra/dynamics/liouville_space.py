@@ -1,6 +1,6 @@
 import itertools
 import numpy as np
-from scipy.sparse import csr_matrix
+from scipy.sparse import lil_matrix, csr_matrix
 from .base import DynamicalModel, SystemOperator
 from ..operator_tools import (SubspaceError, n_excitations,
                               full_liouville_subspace)
@@ -130,6 +130,23 @@ def super_right_matrix(operator):
     I = np.identity(len(operator))
     return np.kron(operator.T, I)
 
+
+def make_sparse(make_super_op):
+    def make_sparse_super_op(op):
+        return lil_matrix(make_super_op(op))
+    return make_sparse_super_op
+
+@make_sparse
+def super_right_sparse_matrix(operator):
+    return super_right_matrix(operator)
+
+@make_sparse
+def super_left_sparse_matrix(operator):
+    return super_left_matrix(operator)
+
+@make_sparse
+def super_commutator_sparse_matrix(operator):
+    return super_commutator_matrix(operator)
 
 class LiouvilleSpaceOperator(SystemOperator):
     """
