@@ -42,7 +42,7 @@ def matsubara_frequencies(K, gamma, T):
     v[0] = gamma
     return v
 
-def corr_func_coeffs(K, gamma, T, reorg_en, matsu_freqs):
+def corr_func_coeffs(K, gamma, T, reorg_en, matsu_freqs, aki_temp_corr=False):
     """
     returns coefficients  c_{j,k} corresponding to the correlation function:
     C_j(t) = \sum_{m=0}^\inf c_{j,k} exp(-v_{j,k} t)
@@ -53,7 +53,11 @@ def corr_func_coeffs(K, gamma, T, reorg_en, matsu_freqs):
     inv_T = 1 / T
     bath_coeffs = []
 
-    bath_coeffs.append(reorg_en * gamma * (1 / np.tan(gamma / (2 * T)) - 1j))
+    if aki_temp_corr:
+        # approx tan(x) = x
+        bath_coeffs.append(reorg_en * gamma * (1/(gamma / (2 * T)) - 1j))
+    else:
+        bath_coeffs.append(reorg_en * gamma * (1 / np.tan(gamma / (2 * T)) - 1j))
 
     for k in xrange(1, K + 1):
         bath_coeffs.append(4 * reorg_en * gamma * T * matsu_freqs[k] /
@@ -170,7 +174,8 @@ class HEOMModel(LiouvilleSpaceModel):
     """
 
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
-                 unit_convert=1, level_cutoff=3, K=1, low_temp_corr=True):
+                 unit_convert=1, level_cutoff=3, K=1, low_temp_corr=True,
+                 modified_HEOM=False, aki_temp_corr=False):
         evolve_basis = 'site'
         super(HEOMModel, self).__init__(hamiltonian, rw_freq,
                                         hilbert_subspace, unit_convert,
@@ -178,13 +183,21 @@ class HEOMModel(LiouvilleSpaceModel):
         self.level_cutoff = level_cutoff
         self.K = K
         self.low_temp_corr = low_temp_corr
+        self.modified_HEOM = modified_HEOM
+        self.aki_temp_corr = aki_temp_corr
+
+        if modified_HEOM:
+            # this low_temp_correction is a part of modified_HEOM
+            assert self.low_temp_corr
 
     @memoized_property
     def evolution_super_operator(self):
         return (self.unit_convert
                 * self.HEOM_tensor(self.hilbert_subspace,
                               K=self.K, level_cutoff=self.level_cutoff,
-                              low_temp_corr=self.low_temp_corr))
+                              low_temp_corr=self.low_temp_corr,
+                              modified_HEOM=self.modified_HEOM,
+                              aki_temp_corr=self.aki_temp_corr))
 
     def equation_of_motion(self, liouville_subspace, heisenberg_picture=False):
         """
@@ -219,7 +232,9 @@ class HEOMModel(LiouvilleSpaceModel):
             return evolve_matrix.dot(rho_expanded)
         return eom
 
-    def HEOM_tensor(self, subspace='ge', K=3, level_cutoff=3, low_temp_corr=True):
+    def HEOM_tensor(self, subspace='ge', K=3, level_cutoff=3,
+                    low_temp_corr=True, modified_HEOM=False,
+                    aki_temp_corr=False):
         """
         Calculates the HEOM tensor elements in the energy eigenbasis
 
@@ -277,7 +292,7 @@ class HEOMModel(LiouvilleSpaceModel):
         reorg_en = self.hamiltonian.bath.reorg_energy
 
         matsu_freqs = matsubara_frequencies(K, gamma, temp)
-        bath_coeffs = corr_func_coeffs(K, gamma, temp, reorg_en, matsu_freqs)
+        bath_coeffs = corr_func_coeffs(K, gamma, temp, reorg_en, matsu_freqs, aki_temp_corr)
 
         ado_indices, mat_to_ind = ADO_mappings(N, K, level_cutoff)
 
@@ -302,8 +317,12 @@ class HEOMModel(LiouvilleSpaceModel):
             proj_op_right.append(super_right_sparse_matrix(proj_op))
 
         matsu_freqs_inf = matsubara_frequencies(K + 5000, gamma, temp)
-        bath_coeffs_inf = corr_func_coeffs(K + 5000, gamma, temp, reorg_en, matsu_freqs_inf)
-        temp_corr_coeff = np.sum((bath_coeffs_inf / matsu_freqs_inf)[K + 1:])
+        bath_coeffs_inf = corr_func_coeffs(K + 5000, gamma, temp, reorg_en, matsu_freqs_inf, aki_temp_corr)
+
+        if aki_temp_corr:
+            temp_corr_coeff = bath_coeffs_inf[1] / matsu_freqs_inf[1]               # AKIs
+        else:
+            temp_corr_coeff = np.sum((bath_coeffs_inf / matsu_freqs_inf)[K + 1:])   # NOT AKIs
 
         for n, ado_index in enumerate(ado_indices):
             # Loop over \dot{rho_n}
@@ -314,7 +333,7 @@ class HEOMModel(LiouvilleSpaceModel):
             L[left_slice, left_slice] = -1j * liouvillian - Isq * en_shift
 
             #double commutator temperature correction!
-            if temp_corr_coeff:
+            if low_temp_corr or aki_temp_corr:
                 temp = np.zeros((N ** 2, N ** 2))
                 for j in xrange(N):
                     temp += (proj_op_left[j] + proj_op_right[j]
@@ -335,11 +354,24 @@ class HEOMModel(LiouvilleSpaceModel):
                 if p_index is not None:
                     plus_slice = self.ado_slices[p_index]
                     commutator = proj_op_left[j] - proj_op_right[j]
-                    L[left_slice, plus_slice] = -1j * commutator
+                    if modified_HEOM:
+                        mod_coef = np.sqrt((n_jk + 1) *
+                                           np.abs(bath_coeffs[k]))
+                    else:
+                        mod_coef = 1
+                    L[left_slice, plus_slice] = -1j * mod_coef * commutator
 
                 if n_index is not None:
                     minus_slice = self.ado_slices[n_index]
                     commutator = bath_coeffs[k] * proj_op_left[j] \
                         - np.conjugate(bath_coeffs[k]) * proj_op_right[j]
-                    L[left_slice, minus_slice] = -1j * n_jk * commutator
+                    if modified_HEOM:
+                        mod_coef = np.sqrt(n_jk / np.abs(bath_coeffs[k]))
+                    else:
+                        mod_coef = n_jk
+
+                    L[left_slice, minus_slice] = -1j * mod_coef * commutator
+                    if aki_temp_corr:
+                        commutator2 =  (proj_op_left[j] - proj_op_right[j])
+                        L[left_slice, minus_slice] +=  (-1j * 4 * reorg_en * gamma ** 2 * temp / (matsu_freqs_inf[1] ** 2 - gamma ** 2)) * commutator2
         return csr_matrix(L)
