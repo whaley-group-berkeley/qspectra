@@ -86,22 +86,15 @@ class ZOFEModel(DynamicalModel):
         self.ham_hermit = ham_hermit
         self.rho_hermit = rho_hermit
 
-    def density_matrix_to_state_vector(self, rho0, liouville_subspace):
+    def initial_state_and_oop_vec(self, initial_rho_vec):
         # initial auxiliary operator for the ZOFE master equation
-        state0 = rho0.reshape((-1), order='F')
         initial_oop = np.zeros(self.oop_shape, dtype=complex)
-        return np.append(state0, initial_oop.reshape((-1), order='F'))
-
-    def state_vector_to_density_matrix(self, rhos):
-        """
-        turn the diff eq trajectory (list of state vectors) into a
-        list of density matrices
-        """
-        return np.array([self.state_vec_to_operators(k)[0] for k in rhos])
+        return np.append(initial_rho_vec,
+                         initial_oop.reshape((-1), order='F'))
 
     def thermal_state(self, _):
         rho0 = self.hamiltonian.thermal_state(self.hilbert_subspace)
-        return self.density_matrix_to_state_vector(rho0, None)
+        return self.initial_state_and_oop_vec(matrix_to_ket_vec(rho0))
 
     def map_between_subspaces(self, state, from_subspace, to_subspace):
         return state

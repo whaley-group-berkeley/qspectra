@@ -49,21 +49,6 @@ class DynamicalModel(object):
     def __repr__(self):
         return inspect_repr(self)
 
-
-    def density_matrix_to_state_vector(self, rho):
-        """
-        turn a density matrix into a state vector to use as the
-        diff eq initial condition
-        """
-        return rho
-
-    def state_vector_density_matrix(self, rho):
-        """
-        turn the diff eq trajectory (list of state vectors) into a
-        list of density matrices
-        """
-        return rho
-
     @abstractmethod
     def thermal_state(self, liouville_subspace):
         """
