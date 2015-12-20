@@ -5,6 +5,7 @@ from dynamics.liouville_space import (n_excitations, matrix_to_ket_vec,
 from dynamics.redfield import RedfieldModel
 from dynamics.unitary import UnitaryModel
 from dynamics.zofe import ZOFEModel
+from dynamics.heom import HEOMModel
 from hamiltonian import (Hamiltonian, ElectronicHamiltonian,
                          VibronicHamiltonian)
 from operator_tools import (unit_vec, basis_transform_operator,
@@ -17,6 +18,7 @@ from simulate.eom import (simulate_dynamics, simulate_with_fields,
                           simulate_pump)
 from simulate.response import (linear_response, absorption_spectra,
                                impulsive_probe, third_order_response,
+                               two_dimensional_spectra,
                                PUMP_PROBE_PATHWAYS, THIRD_ORDER_PATHWAYS)
 from simulate.utils import fourier_transform, integrate, bound_signal
 
