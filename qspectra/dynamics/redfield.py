@@ -12,7 +12,7 @@ def redfield_tensor(hamiltonian, subspace='ge', secular=True,
     Calculates the Redfield tensor elements as a 4D array in the energy
     eigenbasis
 
-    Each bath is assumed to be of identical form
+    All baths are assumed to be uncorrelated and of identical form.
 
     Parameters
     ----------
@@ -35,24 +35,32 @@ def redfield_tensor(hamiltonian, subspace='ge', secular=True,
 
     References
     ----------
-    Nitzan
+    May and Kuhn (2011), Charge and Energy Transfer Dynamics in Molecular
+    Systems, Third Edition.
     """
     n_states = hamiltonian.n_states(subspace)
     energies = hamiltonian.E(subspace)
 
     K = [basis_transform_operator(coupling, hamiltonian.U(subspace))
          for coupling in hamiltonian.system_bath_couplings(subspace)]
-    xi = np.einsum('iab,icd->abcd', K, K)
 
     if discard_imag_corr:
         corr_func = hamiltonian.bath.corr_func_real
     else:
         corr_func = hamiltonian.bath.corr_func_complex
-    corr = np.array([[corr_func(Ei - Ej) for Ej in energies]
-                     for Ei in energies])
+    # this is the "one-sided correlation function" as a function of frequency,
+    # C(\omega) = \int_0^\infty \exp(i \omega t) C(t) dt
+    C = np.array([[corr_func(Ei - Ej) for Ej in energies] for Ei in energies])
 
-    Gamma = np.einsum('abcd,dc->abcd', xi, corr)
+    # May and Kuhn, Eq (3.319)
+    # The assumption of uncorrelated baths (i.e., $C_{uv}(t) = 0$) allows us to
+    # drop the index v. However, unlike May and Kuhn, we do not necessarily
+    # discard the imaginary part of this variable, depending on the argument
+    # discard_imag_corr as used above above for determining C (this does
+    # implicitly assume that all system-bath coupling matrices are real).
+    Gamma = np.einsum('iab,icd,dc->abcd', K, K, C)
 
+    # May and Kuhn, Eq (3.322)
     I = np.identity(n_states)
     Gamma_summed = np.einsum('abbc->ac', Gamma)
     R = (np.einsum('ac,bd->abcd', I, Gamma_summed).conj()
