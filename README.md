@@ -50,7 +50,7 @@ Features
     - Unitary
     - Redfield theory (secular/non-secular)
     - Zeroth order functional expansion (ZOFE)
-    - Hierarchical equations of motion (HEOM), *on the roadmap*
+    - Hierarchical equations of motion (HEOM).
     - Time non-local ME (special case of HEOM), *on the roadmap*
 - Spectroscopy/simulation:
     - Free evolution (no field)
