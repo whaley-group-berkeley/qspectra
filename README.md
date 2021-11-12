@@ -29,7 +29,7 @@ and scipy installed.
 Then, clone the git repository and use `pip`:
 ```
 git clone https://github.com/whaley-group-berkeley/QSpectra.git
-pip install -e qspectra
+pip install -e QSpectra
 ```
 
 I highly recommend using `-e` flag, which keeps the install directory in-place
