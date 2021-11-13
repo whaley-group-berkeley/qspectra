@@ -1,6 +1,6 @@
 import setuptools
 
-setup(
+setuptools.setup(
     name='qspectra',
     description='QSpectra: Nonlinear Spectroscopy for Molecular Aggregates',
     version='0.1-dev',
