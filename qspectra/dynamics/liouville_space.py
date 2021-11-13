@@ -84,8 +84,8 @@ def tensor_to_super(tensor_operator):
     """
     N = tensor_operator.shape[0]
     super_operator = np.empty((N ** 2, N ** 2), dtype=tensor_operator.dtype)
-    for i in xrange(N):
-        for j in xrange(N):
+    for i in range(N):
+        for j in range(N):
             super_operator[i::N, j::N] = tensor_operator[i, :, j, :]
     return super_operator
 
@@ -170,7 +170,7 @@ class LiouvilleSpaceOperator(SystemOperator):
                            if '->' in liouv_subspace_map
                            else [liouv_subspace_map, liouv_subspace_map])
         self.from_indices, self.to_indices = \
-            map(dynamical_model.liouville_subspace_index, liouv_subspaces)
+            list(map(dynamical_model.liouville_subspace_index, liouv_subspaces))
         self.super_op_mesh = np.ix_(self.to_indices, self.from_indices)
 
     @property
@@ -341,8 +341,8 @@ class LiouvilleSpaceModel(DynamicalModel):
         return eom
 
     def map_between_subspaces(self, state, from_subspace, to_subspace):
-        from_indices, to_indices = map(self.liouville_subspace_index,
-                                       [from_subspace, to_subspace])
+        from_indices, to_indices = list(map(self.liouville_subspace_index,
+                                            [from_subspace, to_subspace]))
         N = self.hamiltonian.n_states(self.hilbert_subspace)
         new_state = matrix_to_ket_vec(np.zeros((N, N), dtype=complex))
         new_state[from_indices] = state

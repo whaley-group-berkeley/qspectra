@@ -83,7 +83,7 @@ def corr_func_coeffs(K, gamma, T, reorg_en, matsu_freqs, aki_temp_corr=False):
     else:
         bath_coeffs.append(reorg_en * gamma * (1 / np.tan(gamma / (2 * T)) - 1j))
 
-    for k in xrange(1, K + 1):
+    for k in range(1, K + 1):
         bath_coeffs.append(4 * reorg_en * gamma * T * matsu_freqs[k] /
                          (matsu_freqs[k] ** 2 - gamma ** 2))
     return bath_coeffs

@@ -57,10 +57,10 @@ class TestPolarization(unittest.TestCase):
         for invariant in invariants:
             self.assertEqual(len(polarization.invariant_polarizations(invariant)),
                              9)
-        self.assertItemsEqual(polarization.invariant_polarizations(invariants[0]),
-                              ['xxxx', 'xxyy', 'xxzz',
-                               'yyxx', 'yyyy', 'yyzz',
-                               'zzxx', 'zzyy', 'zzzz'])
+        self.assertEqual(polarization.invariant_polarizations(invariants[0]),
+                         ['xxxx', 'xxyy', 'xxzz',
+                          'yyxx', 'yyyy', 'yyzz',
+                          'zzxx', 'zzyy', 'zzzz'])
 
     def test_random_rotation_matrix(self):
         M = polarization.random_rotation_matrix()

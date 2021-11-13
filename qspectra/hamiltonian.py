@@ -41,7 +41,7 @@ def ground_state(hamiltonian_matrix):
     # use np.conj()
     # also note: the energies E from eigh are sorted in ascending order, so we
     # know that E[0] is the minimum
-    rho = np.mean([np.outer(U[:, i], U[:, i]) for i in xrange(len(U))
+    rho = np.mean([np.outer(U[:, i], U[:, i]) for i in range(len(U))
                    if E[i] == E[0]], axis=0)
     return rho.astype(complex)
 
@@ -80,7 +80,7 @@ def thermal_state(hamiltonian_matrix, temperature):
 def add_braket(basis_labels):
     braket_labels = []
     for label in basis_labels:
-        if isinstance(label, basestring) or not np.iterable(label):
+        if isinstance(label, str) or not np.iterable(label):
             braket_label = '|{}>'.format(label)
         else:
             braket_label = ''.join('|{}>'.format(i) for i in label)
@@ -93,14 +93,13 @@ class HamiltonianError(Exception):
     """
 
 
-class Hamiltonian(object):
+class Hamiltonian(metaclass=ABCMeta):
     """
     Parent class for Hamiltonian objects
 
     At a minimum, subclasses should implement a new `H` method which returns the
     Hamiltonian as an explicit matrix.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, energy_spread_extra=None, site_labels=None):
         self.energy_spread_extra = energy_spread_extra
@@ -228,7 +227,7 @@ class Hamiltonian(object):
         Note: The ensemble returned by this method is not stochastic. The first
         n ensemble members will always be the same.
         """
-        for n in xrange(ensemble_size):
+        for n in range(ensemble_size):
             yield self.sample(n, random_orientations)
 
     def sample(self, n=None, random_orientations=False):
@@ -587,12 +586,12 @@ class ElectronicHamiltonian(Hamiltonian):
         if self.dipoles is None:
             raise HamiltonianError('transition dipole moments undefined')
         trans_ops = [transition_operator(n, self.n_sites, subspace, transitions)
-                     for n in xrange(self.n_sites)]
+                     for n in range(self.n_sites)]
         return np.einsum('nij,nk,k->ij', trans_ops, self.dipoles,
                          polarization_vector(polarization))
 
     def number_operator(self, site, subspace='gef'):
-        """
+        r"""
         Returns the number operator a_n^\dagger a_n for site n
         """
         return operator_extend(
@@ -606,7 +605,7 @@ class ElectronicHamiltonian(Hamiltonian):
         if self.bath is None:
             raise HamiltonianError('bath undefined')
         return np.array([self.number_operator(n, subspace)
-                         for n in xrange(self.n_sites)])
+                         for n in range(self.n_sites)])
 
     def basis_labels(self, subspace='gef', braket=False):
         """
@@ -632,7 +631,7 @@ class ElectronicHamiltonian(Hamiltonian):
             return custom_labels
 
 class VibronicHamiltonian(Hamiltonian):
-    """
+    r"""
     Hamiltonian which extends an electronic Hamiltonian to include explicit
     vibrations
 
@@ -707,7 +706,7 @@ class VibronicHamiltonian(Hamiltonian):
         return H_vib
 
     def H_electronic_vibrational(self, subspace='gef'):
-        """
+        r"""
         Returns the electronic-vibrational coupled part of the Hamiltonian,
         given by
         H_{el-vib} = sum_{n,m} c_{nm}*|n><n|*(b(m) + b(m)^\dagger)

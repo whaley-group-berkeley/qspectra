@@ -82,7 +82,7 @@ def _simulate_with_fields(dynamical_model, pulses, geometry, polarization,
     eom = dynamical_model.equation_of_motion(liouville_subspace)
     V = [dynamical_model.dipole_operator(liouville_subspace, polar, trans)
          for polar, trans in zip(polarization, geometry)]
-    field_info = zip(pulses, geometry, V)
+    field_info = list(zip(pulses, geometry, V))
 
     def f(t, state):
         deriv = eom(t, state)

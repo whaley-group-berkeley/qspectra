@@ -42,7 +42,7 @@ def _integrate(f, y0, t, t0, method_name, f_params, save_func, **kwargs):
         i0 = 1
     else:
         i0 = 0
-    for i in xrange(i0, len(t)):
+    for i in range(i0, len(t)):
         if solver.successful():
             y[i] = save_func(solver.integrate(t[i]))
         else:
@@ -116,7 +116,7 @@ def slice_along_axis(start=None, stop=None, step=None, axis=0, ndim=1):
     return tuple(slice(start, stop, step)
                  if (n == axis) or (n == ndim + axis)
                  else slice(None)
-                 for n in xrange(ndim))
+                 for n in range(ndim))
 
 
 def is_constant(x, atol=1e-7, positive=None):

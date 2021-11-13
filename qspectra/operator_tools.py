@@ -1,3 +1,4 @@
+from functools import reduce
 import numpy as np
 
 
@@ -142,11 +143,11 @@ def all_states(N, subspace='gef'):
     if 'g' in subspace:
         states.append([])
     if 'e' in subspace:
-        for i in xrange(N):
+        for i in range(N):
             states.append([i])
     if 'f' in subspace:
-        for i in xrange(N):
-            for j in xrange(i + 1, N):
+        for i in range(N):
+            for j in range(i + 1, N):
                 states.append([i, j])
     return states
 
@@ -180,8 +181,8 @@ def operator_1_to_2(operator1):
     def delta(i, j):
         return int(i == j)
 
-    for m in xrange(len(states)):
-        for n in xrange(len(states)):
+    for m in range(len(states)):
+        for n in range(len(states)):
             (i, j), (k, l) = states[m], states[n]
             operator2[m, n] = (operator1[j, l] * delta(i, k) +
                                operator1[j, k] * delta(i, l) +
@@ -259,8 +260,8 @@ def transition_operator(n, n_sites, subspace='gef', include_transitions='-+'):
     """
     states = all_states(n_sites, subspace)
     dipole_matrix = np.zeros((len(states), len(states)))
-    for i in xrange(len(states)):
-        for j in xrange(len(states)):
+    for i in range(len(states)):
+        for j in range(len(states)):
             if (('+' in include_transitions and
                  states[i] == sorted(states[j] + [n]))
                 or ('-' in include_transitions and

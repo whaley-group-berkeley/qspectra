@@ -5,7 +5,7 @@ from .constants import GAUSSIAN_SD_FWHM
 from .utils import inspect_repr
 
 
-class Pulse(object):
+class Pulse(metaclass=ABCMeta):
     """
     Abstract base class defining the Pulse API used by spectroscopy
     simulation methods
@@ -21,8 +21,6 @@ class Pulse(object):
     t_final : float
         Final time for the pulse.
     """
-
-    __metaclass__ = ABCMeta
 
     def __repr__(self):
         return inspect_repr(self)

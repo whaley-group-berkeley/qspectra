@@ -124,7 +124,7 @@ def inspect_repr(obj):
         indent = '\n' + ' ' * length
         return start + indent.join(x for x in text.splitlines())
     # use the arguments to __init__ other than 'self'
-    args = inspect.getargspec(type(obj).__init__).args[1:]
+    args = inspect.getfullargspec(type(obj).__init__).args[1:]
     # extract repr of each argument, removing direct loops
     kwargs = ((k, repr(getattr(obj, k)) if getattr(obj, k) is not obj
                   else '%s(...)' % type(obj).__name__)

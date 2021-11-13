@@ -36,12 +36,12 @@ class TestBasisTransform(unittest.TestCase):
 
         X = np.eye(2)
         actual = operator_tools.basis_transform_operator(X, self.U)
-        assert_allclose(actual, X)
+        assert_allclose(actual, X, atol=1e-15)
 
         X = np.array([[1, -1], [-1, 1]]) / 2.0
         actual = operator_tools.basis_transform_operator(X, self.U)
         expected = np.array([[1, 0], [0, 0]])
-        assert_allclose(actual, expected)
+        assert_allclose(actual, expected, atol=1e-15)
 
     def test_basis_transform_vector(self):
         for rho in [np.random.randn(4),
@@ -72,9 +72,9 @@ class TestExtendedStates(unittest.TestCase):
         self.M = np.array([[1., 2 - 2j], [2 + 2j, 3]])
 
     def test_all_states(self):
-        self.assertEquals(operator_tools.all_states(1), [[], [0]])
-        self.assertEquals(operator_tools.all_states(2), [[], [0], [1], [0, 1]])
-        self.assertEquals(operator_tools.all_states(2, 'ge'), [[], [0], [1]])
+        self.assertEqual(operator_tools.all_states(1), [[], [0]])
+        self.assertEqual(operator_tools.all_states(2), [[], [0], [1], [0, 1]])
+        self.assertEqual(operator_tools.all_states(2, 'ge'), [[], [0], [1]])
 
     def test_operator_1_to_2(self):
         assert_allclose(operator_tools.operator_1_to_2(self.M), [[4]])
@@ -126,10 +126,10 @@ class TestSubspaces(unittest.TestCase):
         assert_equal(operator_tools.n_excitations(3, 2), [2, 6, 6])
 
     def test_extract_subspace(self):
-        self.assertItemsEqual(operator_tools.extract_subspace('gg,eg->gg'),
-                              'ge')
-        self.assertItemsEqual(operator_tools.extract_subspace('gg,ee,ff'),
-                              'gef')
+        self.assertEqual(operator_tools.extract_subspace('gg,eg->gg'),
+                         ['g', 'e'])
+        self.assertEqual(operator_tools.extract_subspace('gg,ee,ff'),
+                         ['g', 'e', 'f'])
 
     def test_full_liouville_subspace(self):
         self.assertEqual(operator_tools.full_liouville_subspace('gg'), 'gg')
@@ -140,11 +140,11 @@ class TestSubspaces(unittest.TestCase):
                          'gg,ge,gf,eg,ee,ef,fg,fe,ff')
 
     def test_hilbert_space_index(self):
-        self.assertEquals(operator_tools.hilbert_subspace_index('g', 'gef', 3),
+        self.assertEqual(operator_tools.hilbert_subspace_index('g', 'gef', 3),
                           slice(0, 1))
-        self.assertEquals(operator_tools.hilbert_subspace_index('e', 'gef', 3),
+        self.assertEqual(operator_tools.hilbert_subspace_index('e', 'gef', 3),
                           slice(1, 4))
-        self.assertEquals(operator_tools.hilbert_subspace_index('f', 'gef', 3),
+        self.assertEqual(operator_tools.hilbert_subspace_index('f', 'gef', 3),
                           slice(4, 7))
-        self.assertEquals(operator_tools.hilbert_subspace_index('f', 'ef', 3),
+        self.assertEqual(operator_tools.hilbert_subspace_index('f', 'ef', 3),
                           slice(3, 6))

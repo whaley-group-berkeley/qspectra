@@ -4,7 +4,7 @@ from ..operator_tools import hilbert_subspace_index
 from ..utils import copy_with_new_cache, inspect_repr
 
 
-class DynamicalModel(object):
+class DynamicalModel(metaclass=ABCMeta):
     """
     Abstract base class defining the DynamicalModel API used by spectroscopy
     simulation methods
@@ -37,7 +37,6 @@ class DynamicalModel(object):
     is not the case for your subclass, you need to override the
     `sample_ensemble` method.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, hamiltonian, rw_freq=None, hilbert_subspace='gef',
                  unit_convert=1):
@@ -141,7 +140,7 @@ class DynamicalModel(object):
             subspace, self.hilbert_subspace)
 
 
-class SystemOperator(object):
+class SystemOperator(metaclass=ABCMeta):
     """
     Abstract base class defining the SystemOperator API used by
     spectroscopy simulation methods
@@ -153,7 +152,6 @@ class SystemOperator(object):
     To implement a new type of system-field operator, inherit from this class
     and override all abstract methods.
     """
-    __metaclass__ = ABCMeta
 
     def commutator(self, state):
         """

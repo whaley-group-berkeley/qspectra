@@ -29,11 +29,11 @@ class TestSubspaces(unittest.TestCase):
             [2, 3, 6, 7])
 
     def test_all_liouville_subspaces(self):
-        self.assertEquals(liouville_space.all_liouville_subspaces('g'),
+        self.assertEqual(liouville_space.all_liouville_subspaces('g'),
                           'gg')
-        self.assertEquals(liouville_space.all_liouville_subspaces('ge'),
+        self.assertEqual(liouville_space.all_liouville_subspaces('ge'),
                           'gg,ge,eg,ee')
-        self.assertEquals(liouville_space.all_liouville_subspaces('gef'),
+        self.assertEqual(liouville_space.all_liouville_subspaces('gef'),
                           'gg,ge,gf,eg,ee,ef,fg,fe,ff')
 
 
@@ -46,11 +46,11 @@ class TestSuperOperators(unittest.TestCase):
     def test_tensor_to_super(self):
         R_tensor = np.random.rand(2, 2, 2, 2)
         R_super = liouville_space.tensor_to_super(R_tensor)
-        for i in xrange(2):
-            for j in xrange(2):
-                for k in xrange(2):
-                    for l in xrange(2):
-                        self.assertEquals(R_tensor[i, j, k, l],
+        for i in range(2):
+            for j in range(2):
+                for k in range(2):
+                    for l in range(2):
+                        self.assertEqual(R_tensor[i, j, k, l],
                                           R_super[i + 2 * j, k + 2 * l])
 
     def test_ket_vec(self):

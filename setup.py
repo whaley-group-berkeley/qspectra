@@ -6,4 +6,5 @@ setuptools.setup(
     version='0.1-dev',
     url='http://github.com/whaley-group-berkeley/qspectra',
     packages=setuptools.find_packages(),
+    install_requires=['numpy', 'scipy'],
 )

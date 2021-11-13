@@ -17,7 +17,7 @@ class Example(object):
 
 class TestInspectRepr(unittest.TestCase):
     def test(self):
-        print Example()
+        print(Example())
         self.assertEqual(
             repr(Example()),
             dedent("""

@@ -37,7 +37,7 @@ def polarization_vector(p):
 
 
 def check_polarizations(p, length):
-    polarizations = np.array(map(polarization_vector, p))
+    polarizations = np.array(list(map(polarization_vector, p)))
     if len(polarizations) != length:
         raise ValueError('%s polarizations required' % length)
     return polarizations

@@ -20,10 +20,13 @@ Although the QSpectra framework is written in Python, we expect that eventually
 submodules for new dynamical models may be written in a compiled language such
 as Fortran or C when if necessary for satisfactory performance.
 
+**Note (November 12, 2021)**: qspectra is no longer maintained. If you find it
+useful in your research, I encourage you to fork it on GitHub.
+
 Install
 -------
 
-First, make sure you're running Python 2.7 and have recent versions of numpy
+First, make sure you're running Python 3 and have recent versions of numpy
 and scipy installed.
 
 Then, clone the git repository and use `pip`:

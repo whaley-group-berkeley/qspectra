@@ -161,7 +161,7 @@ PUMP_PROBE_PATHWAYS = {'GSB': 'gg->eg->gg',
 
 def _parse_pathways(possible_pathways, include_signal):
     selected_pathways = []
-    for k, v in possible_pathways.iteritems():
+    for k, v in possible_pathways.items():
         if include_signal is None or k in include_signal:
             selected_pathways.append(v)
     if not selected_pathways:
